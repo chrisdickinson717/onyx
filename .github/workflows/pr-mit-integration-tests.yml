@@ -50,22 +50,14 @@ jobs:
           all_dirs="[${all_dirs%,}]"
           echo "test-dirs=$all_dirs" >> $GITHUB_OUTPUT
 
-  integration-tests-mit:
-    needs: discover-test-dirs
-    # See https://runs-on.com/runners/linux/
+  build-images:
     runs-on:
       [
         runs-on,
-        runner=32cpu-linux-x64,
+        runner=16cpu-linux-x64,
         disk=large,
         "run-id=${{ github.run_id }}",
       ]
-    
-    strategy:
-      fail-fast: false
-      matrix:
-        test-dir: ${{ fromJson(needs.discover-test-dirs.outputs.test-dirs) }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -78,7 +70,9 @@ jobs:
           cache-dependency-path: |
             backend/requirements/default.txt
             backend/requirements/dev.txt
-      - run: |
+      
+      - name: Install Python dependencies
+        run: |
           python -m pip install --upgrade pip
           pip install --retries 5 --timeout 30 -r backend/requirements/default.txt
           pip install --retries 5 --timeout 30 -r backend/requirements/dev.txt
@@ -110,59 +104,88 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      # tag every docker image with "test" so that we can spin up the correct set
-      # of images during testing
-
-      # We don't need to build the Web Docker image since it's not yet used
-      # in the integration tests. We have a separate action to verify that it builds
-      # successfully.
-      - name: Pull Web Docker image
+      # Pull Web Docker image and tag for testing
+      - name: Pull and tag Web Docker image
         run: |
           docker pull onyxdotapp/onyx-web-server:latest
-          docker tag onyxdotapp/onyx-web-server:latest onyxdotapp/onyx-web-server:test
+          docker tag onyxdotapp/onyx-web-server:latest onyxdotapp/onyx-web-server:test-${{ github.run_id }}
+          docker push onyxdotapp/onyx-web-server:test-${{ github.run_id }}
 
-      # we use the runs-on cache for docker builds
-      # in conjunction with runs-on runners, it has better speed and unlimited caching
-      # https://runs-on.com/caching/s3-cache-for-github-actions/
-      # https://runs-on.com/caching/docker/
-      # https://github.com/moby/buildkit#s3-cache-experimental
-
-      # images are built and run locally for testing purposes. Not pushed.
-      - name: Build Backend Docker image
+      # Build and push Backend Docker image
+      - name: Build and push Backend Docker image
         uses: ./.github/actions/custom-build-and-push
         with:
           context: ./backend
           file: ./backend/Dockerfile
           platforms: linux/amd64
-          tags: onyxdotapp/onyx-backend:test
-          push: false
-          load: true
+          tags: onyxdotapp/onyx-backend:test-${{ github.run_id }}
+          push: true
           cache-from: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/backend-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}
           cache-to: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/backend-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }},mode=max
 
-      - name: Build Model Server Docker image
+      # Build and push Model Server Docker image
+      - name: Build and push Model Server Docker image
         uses: ./.github/actions/custom-build-and-push
         with:
           context: ./backend
           file: ./backend/Dockerfile.model_server
           platforms: linux/amd64
-          tags: onyxdotapp/onyx-model-server:test
-          push: false
-          load: true
+          tags: onyxdotapp/onyx-model-server:test-${{ github.run_id }}
+          push: true
           cache-from: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/model-server-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}
           cache-to: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/model-server-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }},mode=max
 
-      - name: Build integration test Docker image
+      # Build and push integration test Docker image
+      - name: Build and push integration test Docker image
         uses: ./.github/actions/custom-build-and-push
         with:
           context: ./backend
           file: ./backend/tests/integration/Dockerfile
           platforms: linux/amd64
-          tags: onyxdotapp/onyx-integration:test
-          push: false
-          load: true
+          tags: onyxdotapp/onyx-integration:test-${{ github.run_id }}
+          push: true
           cache-from: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/integration-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}
           cache-to: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/integration-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }},mode=max
+
+  integration-tests-mit:
+    needs: [discover-test-dirs, build-images]
+    # See https://runs-on.com/runners/linux/
+    runs-on:
+      [
+        runs-on,
+        runner=4cpu-linux-x64,
+        disk=large,
+        "run-id=${{ github.run_id }}",
+      ]
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        test-dir: ${{ fromJson(needs.discover-test-dirs.outputs.test-dirs) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      # Pull pre-built images
+      - name: Pull pre-built Docker images
+        run: |
+          docker pull onyxdotapp/onyx-web-server:test-${{ github.run_id }}
+          docker pull onyxdotapp/onyx-backend:test-${{ github.run_id }}
+          docker pull onyxdotapp/onyx-model-server:test-${{ github.run_id }}
+          docker pull onyxdotapp/onyx-integration:test-${{ github.run_id }}
+          
+          # Re-tag with expected names for docker-compose
+          docker tag onyxdotapp/onyx-web-server:test-${{ github.run_id }} onyxdotapp/onyx-web-server:test
+          docker tag onyxdotapp/onyx-backend:test-${{ github.run_id }} onyxdotapp/onyx-backend:test
+          docker tag onyxdotapp/onyx-model-server:test-${{ github.run_id }} onyxdotapp/onyx-model-server:test
+          docker tag onyxdotapp/onyx-integration:test-${{ github.run_id }} onyxdotapp/onyx-integration:test
 
       # NOTE: Use pre-ping/null pool to reduce flakiness due to dropped connections
       - name: Start Docker containers
