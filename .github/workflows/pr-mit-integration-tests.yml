@@ -20,8 +20,38 @@ env:
   JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
   JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
   PLATFORM_PAIR: linux-amd64
+
 jobs:
+  discover-test-dirs:
+    runs-on: ubuntu-latest
+    outputs:
+      test-dirs: ${{ steps.set-matrix.outputs.test-dirs }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Discover test directories
+        id: set-matrix
+        run: |
+          # Find all leaf-level directories in both test directories
+          tests_dirs=$(find backend/tests/integration/tests -mindepth 1 -maxdepth 1 -type d ! -name "__pycache__" -exec basename {} \; | sort)
+          connector_dirs=$(find backend/tests/integration/connector_job_tests -mindepth 1 -maxdepth 1 -type d ! -name "__pycache__" -exec basename {} \; | sort)
+          
+          # Create JSON array with directory info
+          all_dirs=""
+          for dir in $tests_dirs; do
+            all_dirs="$all_dirs{\"path\":\"tests/$dir\",\"name\":\"tests-$dir\"},"
+          done
+          for dir in $connector_dirs; do
+            all_dirs="$all_dirs{\"path\":\"connector_job_tests/$dir\",\"name\":\"connector-$dir\"},"
+          done
+          
+          # Remove trailing comma and wrap in array
+          all_dirs="[${all_dirs%,}]"
+          echo "test-dirs=$all_dirs" >> $GITHUB_OUTPUT
+
   integration-tests-mit:
+    needs: discover-test-dirs
     # See https://runs-on.com/runners/linux/
     runs-on:
       [
@@ -30,6 +60,12 @@ jobs:
         disk=large,
         "run-id=${{ github.run_id }}",
       ]
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        test-dir: ${{ fromJson(needs.discover-test-dirs.outputs.test-dirs) }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -183,9 +219,9 @@ jobs:
             -p mock-it-services-stack up -d
 
       # NOTE: Use pre-ping/null to reduce flakiness due to dropped connections
-      - name: Run Standard Integration Tests
+      - name: Run Integration Tests for ${{ matrix.test-dir.name }}
         run: |
-          echo "Running integration tests..."
+          echo "Running integration tests for ${{ matrix.test-dir.path }}..."
           docker run --rm --network onyx-stack_default \
             --name test-runner \
             -e POSTGRES_HOST=relational_db \
@@ -211,8 +247,7 @@ jobs:
             -e MOCK_CONNECTOR_SERVER_HOST=mock_connector_server \
             -e MOCK_CONNECTOR_SERVER_PORT=8001 \
             onyxdotapp/onyx-integration:test \
-            /app/tests/integration/tests \
-            /app/tests/integration/connector_job_tests
+            /app/tests/integration/${{ matrix.test-dir.path }}
         continue-on-error: true
         id: run_tests
 
@@ -243,7 +278,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: docker-all-logs
+          name: docker-all-logs-${{ matrix.test-dir.name }}
           path: ${{ github.workspace }}/docker-compose.log
       # ------------------------------------------------------------
 
