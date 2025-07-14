@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload Web Docker image to S3
         run: |
-          aws s3 cp onyx-web-server-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-web-server-test-${{ github.run_id }}.tar
+          aws s3 cp onyx-web-server-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/cache/${{ github.repository }}/mit-integration-tests/images/onyx-web-server-test-${{ github.run_id }}.tar
 
   build-backend-image:
     runs-on:
@@ -147,7 +147,7 @@ jobs:
 
       - name: Upload Backend Docker image to S3
         run: |
-          aws s3 cp onyx-backend-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-backend-test-${{ github.run_id }}.tar
+          aws s3 cp onyx-backend-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/cache/${{ github.repository }}/mit-integration-tests/images/onyx-backend-test-${{ github.run_id }}.tar
 
   build-model-server-image:
     runs-on:
@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload Model Server Docker image to S3
         run: |
-          aws s3 cp onyx-model-server-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-model-server-test-${{ github.run_id }}.tar
+          aws s3 cp onyx-model-server-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/cache/${{ github.repository }}/mit-integration-tests/images/onyx-model-server-test-${{ github.run_id }}.tar
 
   build-integration-image:
     needs: prepare-build
@@ -224,7 +224,7 @@ jobs:
 
       - name: Upload Integration Docker image to S3
         run: |
-          aws s3 cp onyx-integration-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-integration-test-${{ github.run_id }}.tar
+          aws s3 cp onyx-integration-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/cache/${{ github.repository }}/mit-integration-tests/images/onyx-integration-test-${{ github.run_id }}.tar
 
   integration-tests-mit:
     needs:
@@ -257,10 +257,10 @@ jobs:
       - name: Download and load Docker images from S3
         run: |
           # Download images from S3
-          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-web-server-test-${{ github.run_id }}.tar onyx-web-server-test-${{ github.run_id }}.tar
-          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-backend-test-${{ github.run_id }}.tar onyx-backend-test-${{ github.run_id }}.tar
-          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-model-server-test-${{ github.run_id }}.tar onyx-model-server-test-${{ github.run_id }}.tar
-          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-integration-test-${{ github.run_id }}.tar onyx-integration-test-${{ github.run_id }}.tar
+          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/cache/${{ github.repository }}/mit-integration-tests/images/onyx-web-server-test-${{ github.run_id }}.tar onyx-web-server-test-${{ github.run_id }}.tar
+          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/cache/${{ github.repository }}/mit-integration-tests/images/onyx-backend-test-${{ github.run_id }}.tar onyx-backend-test-${{ github.run_id }}.tar
+          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/cache/${{ github.repository }}/mit-integration-tests/images/onyx-model-server-test-${{ github.run_id }}.tar onyx-model-server-test-${{ github.run_id }}.tar
+          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/cache/${{ github.repository }}/mit-integration-tests/images/onyx-integration-test-${{ github.run_id }}.tar onyx-integration-test-${{ github.run_id }}.tar
 
           # Load images into Docker
           docker load -i onyx-web-server-test-${{ github.run_id }}.tar
