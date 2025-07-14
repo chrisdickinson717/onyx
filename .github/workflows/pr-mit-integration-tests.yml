@@ -300,7 +300,7 @@ jobs:
           (pigz -dc onyx-backend-test.tar.gz | docker load) &
           (pigz -dc onyx-model-server-test.tar.gz | docker load) &
           (pigz -dc onyx-integration-test.tar.gz | docker load) &
-          
+
           # Wait for all background jobs to complete
           wait
           echo "All Docker images loaded successfully"
