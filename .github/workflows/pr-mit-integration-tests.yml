@@ -149,7 +149,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Model Server Docker image
-        uses: ./.github/actions/custom-build-and-push
+        uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile.model_server
