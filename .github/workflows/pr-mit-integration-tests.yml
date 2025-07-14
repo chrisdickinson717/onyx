@@ -20,6 +20,8 @@ env:
   JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
   JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
   PLATFORM_PAIR: linux-amd64
+  RUNS_ON_S3_BUCKET_CACHE: ${{ vars.RUNS_ON_S3_BUCKET_CACHE || 'onyx-runs-on-cache' }}
+  RUNS_ON_AWS_REGION: ${{ vars.RUNS_ON_AWS_REGION || 'us-east-2' }}
 
 jobs:
   discover-test-dirs:
