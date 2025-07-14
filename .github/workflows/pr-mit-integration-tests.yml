@@ -29,14 +29,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Discover test directories
         id: set-matrix
         run: |
           # Find all leaf-level directories in both test directories
           tests_dirs=$(find backend/tests/integration/tests -mindepth 1 -maxdepth 1 -type d ! -name "__pycache__" -exec basename {} \; | sort)
           connector_dirs=$(find backend/tests/integration/connector_job_tests -mindepth 1 -maxdepth 1 -type d ! -name "__pycache__" -exec basename {} \; | sort)
-          
+
           # Create JSON array with directory info
           all_dirs=""
           for dir in $tests_dirs; do
@@ -45,23 +45,17 @@ jobs:
           for dir in $connector_dirs; do
             all_dirs="$all_dirs{\"path\":\"connector_job_tests/$dir\",\"name\":\"connector-$dir\"},"
           done
-          
+
           # Remove trailing comma and wrap in array
           all_dirs="[${all_dirs%,}]"
           echo "test-dirs=$all_dirs" >> $GITHUB_OUTPUT
 
-  build-images:
-    runs-on:
-      [
-        runs-on,
-        runner=16cpu-linux-x64,
-        disk=large,
-        "run-id=${{ github.run_id }}",
-      ]
+  prepare-build:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -70,7 +64,7 @@ jobs:
           cache-dependency-path: |
             backend/requirements/default.txt
             backend/requirements/dev.txt
-      
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -94,61 +88,153 @@ jobs:
             -g python \
             -o /local/onyx_openapi_client \
             --package-name onyx_openapi_client
-            
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - name: Upload OpenAPI artifacts
+        uses: actions/upload-artifact@v4
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
+          name: openapi-artifacts
+          path: backend/generated/
 
-      # Pull Web Docker image and tag for testing
+  build-web-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Pull and tag Web Docker image
         run: |
           docker pull onyxdotapp/onyx-web-server:latest
           docker tag onyxdotapp/onyx-web-server:latest onyxdotapp/onyx-web-server:test-${{ github.run_id }}
-          docker push onyxdotapp/onyx-web-server:test-${{ github.run_id }}
 
-      # Build and push Backend Docker image
-      - name: Build and push Backend Docker image
+      - name: Save Web Docker image to tar file
+        run: |
+          docker save onyxdotapp/onyx-web-server:test-${{ github.run_id }} -o onyx-web-server-test-${{ github.run_id }}.tar
+
+      - name: Upload Web Docker image to S3
+        run: |
+          aws s3 cp onyx-web-server-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-web-server-test-${{ github.run_id }}.tar
+
+  build-backend-image:
+    runs-on:
+      [
+        runs-on,
+        runner=16cpu-linux-x64,
+        disk=large,
+        "run-id=${{ github.run_id }}",
+      ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Docker image
         uses: ./.github/actions/custom-build-and-push
         with:
           context: ./backend
           file: ./backend/Dockerfile
           platforms: linux/amd64
           tags: onyxdotapp/onyx-backend:test-${{ github.run_id }}
-          push: true
+          push: false
+          load: true
           cache-from: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/backend-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}
           cache-to: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/backend-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }},mode=max
 
-      # Build and push Model Server Docker image
-      - name: Build and push Model Server Docker image
+      - name: Save Backend Docker image to tar file
+        run: |
+          docker save onyxdotapp/onyx-backend:test-${{ github.run_id }} -o onyx-backend-test-${{ github.run_id }}.tar
+
+      - name: Upload Backend Docker image to S3
+        run: |
+          aws s3 cp onyx-backend-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-backend-test-${{ github.run_id }}.tar
+
+  build-model-server-image:
+    runs-on:
+      [
+        runs-on,
+        runner=16cpu-linux-x64,
+        disk=large,
+        "run-id=${{ github.run_id }}",
+      ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Model Server Docker image
         uses: ./.github/actions/custom-build-and-push
         with:
           context: ./backend
           file: ./backend/Dockerfile.model_server
           platforms: linux/amd64
           tags: onyxdotapp/onyx-model-server:test-${{ github.run_id }}
-          push: true
+          push: false
+          load: true
           cache-from: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/model-server-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}
           cache-to: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/model-server-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }},mode=max
 
-      # Build and push integration test Docker image
-      - name: Build and push integration test Docker image
+      - name: Save Model Server Docker image to tar file
+        run: |
+          docker save onyxdotapp/onyx-model-server:test-${{ github.run_id }} -o onyx-model-server-test-${{ github.run_id }}.tar
+
+      - name: Upload Model Server Docker image to S3
+        run: |
+          aws s3 cp onyx-model-server-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-model-server-test-${{ github.run_id }}.tar
+
+  build-integration-image:
+    needs: prepare-build
+    runs-on:
+      [
+        runs-on,
+        runner=16cpu-linux-x64,
+        disk=large,
+        "run-id=${{ github.run_id }}",
+      ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download OpenAPI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: openapi-artifacts
+          path: backend/generated/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build integration test Docker image
         uses: ./.github/actions/custom-build-and-push
         with:
           context: ./backend
           file: ./backend/tests/integration/Dockerfile
           platforms: linux/amd64
           tags: onyxdotapp/onyx-integration:test-${{ github.run_id }}
-          push: true
+          push: false
+          load: true
           cache-from: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/integration-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}
           cache-to: type=s3,prefix=cache/${{ github.repository }}/mit-integration-tests/integration-${{ env.PLATFORM_PAIR }}/,region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }},mode=max
 
+      - name: Save Integration Docker image to tar file
+        run: |
+          docker save onyxdotapp/onyx-integration:test-${{ github.run_id }} -o onyx-integration-test-${{ github.run_id }}.tar
+
+      - name: Upload Integration Docker image to S3
+        run: |
+          aws s3 cp onyx-integration-test-${{ github.run_id }}.tar s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-integration-test-${{ github.run_id }}.tar
+
   integration-tests-mit:
-    needs: [discover-test-dirs, build-images]
+    needs:
+      [
+        discover-test-dirs,
+        build-web-image,
+        build-backend-image,
+        build-model-server-image,
+        build-integration-image,
+      ]
     # See https://runs-on.com/runners/linux/
     runs-on:
       [
@@ -157,7 +243,7 @@ jobs:
         disk=large,
         "run-id=${{ github.run_id }}",
       ]
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -167,25 +253,32 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-
-      # Pull pre-built images
-      - name: Pull pre-built Docker images
+      # Download and load pre-built images from S3
+      - name: Download and load Docker images from S3
         run: |
-          docker pull onyxdotapp/onyx-web-server:test-${{ github.run_id }}
-          docker pull onyxdotapp/onyx-backend:test-${{ github.run_id }}
-          docker pull onyxdotapp/onyx-model-server:test-${{ github.run_id }}
-          docker pull onyxdotapp/onyx-integration:test-${{ github.run_id }}
-          
+          # Download images from S3
+          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-web-server-test-${{ github.run_id }}.tar onyx-web-server-test-${{ github.run_id }}.tar
+          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-backend-test-${{ github.run_id }}.tar onyx-backend-test-${{ github.run_id }}.tar
+          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-model-server-test-${{ github.run_id }}.tar onyx-model-server-test-${{ github.run_id }}.tar
+          aws s3 cp s3://${{ env.RUNS_ON_S3_BUCKET_CACHE }}/docker-images/${{ github.repository }}/mit-integration-tests/onyx-integration-test-${{ github.run_id }}.tar onyx-integration-test-${{ github.run_id }}.tar
+
+          # Load images into Docker
+          docker load -i onyx-web-server-test-${{ github.run_id }}.tar
+          docker load -i onyx-backend-test-${{ github.run_id }}.tar
+          docker load -i onyx-model-server-test-${{ github.run_id }}.tar
+          docker load -i onyx-integration-test-${{ github.run_id }}.tar
+
           # Re-tag with expected names for docker-compose
           docker tag onyxdotapp/onyx-web-server:test-${{ github.run_id }} onyxdotapp/onyx-web-server:test
           docker tag onyxdotapp/onyx-backend:test-${{ github.run_id }} onyxdotapp/onyx-backend:test
           docker tag onyxdotapp/onyx-model-server:test-${{ github.run_id }} onyxdotapp/onyx-model-server:test
           docker tag onyxdotapp/onyx-integration:test-${{ github.run_id }} onyxdotapp/onyx-integration:test
+
+          # Clean up tar files
+          rm onyx-web-server-test-${{ github.run_id }}.tar
+          rm onyx-backend-test-${{ github.run_id }}.tar
+          rm onyx-model-server-test-${{ github.run_id }}.tar
+          rm onyx-integration-test-${{ github.run_id }}.tar
 
       # NOTE: Use pre-ping/null pool to reduce flakiness due to dropped connections
       - name: Start Docker containers
