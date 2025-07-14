@@ -108,13 +108,13 @@ jobs:
 
       - name: Save Web Docker image to tar file
         run: |
-          docker save onyxdotapp/onyx-web-server:test-${{ github.run_id }} -o onyx-web-server-test.tar
+          docker save onyxdotapp/onyx-web-server:test-${{ github.run_id }} | gzip > onyx-web-server-test.tar.gz
 
       - name: Upload Web Docker image artifact
         uses: actions/upload-artifact@v4
         with:
           name: onyx-web-server-test-${{ github.run_id }}
-          path: onyx-web-server-test.tar
+          path: onyx-web-server-test.tar.gz
           retention-days: 1
 
   build-backend-image:
@@ -146,13 +146,13 @@ jobs:
 
       - name: Save Backend Docker image to tar file
         run: |
-          docker save onyxdotapp/onyx-backend:test-${{ github.run_id }} -o onyx-backend-test.tar
+          docker save onyxdotapp/onyx-backend:test-${{ github.run_id }} | gzip > onyx-backend-test.tar.gz
 
       - name: Upload Backend Docker image artifact
         uses: actions/upload-artifact@v4
         with:
           name: onyx-backend-test-${{ github.run_id }}
-          path: onyx-backend-test.tar
+          path: onyx-backend-test.tar.gz
           retention-days: 1
 
   build-model-server-image:
@@ -184,13 +184,13 @@ jobs:
 
       - name: Save Model Server Docker image to tar file
         run: |
-          docker save onyxdotapp/onyx-model-server:test-${{ github.run_id }} -o onyx-model-server-test.tar
+          docker save onyxdotapp/onyx-model-server:test-${{ github.run_id }} | gzip > onyx-model-server-test.tar.gz
 
       - name: Upload Model Server Docker image artifact
         uses: actions/upload-artifact@v4
         with:
           name: onyx-model-server-test-${{ github.run_id }}
-          path: onyx-model-server-test.tar
+          path: onyx-model-server-test.tar.gz
           retention-days: 1
 
   build-integration-image:
@@ -229,13 +229,13 @@ jobs:
 
       - name: Save Integration Docker image to tar file
         run: |
-          docker save onyxdotapp/onyx-integration:test-${{ github.run_id }} -o onyx-integration-test.tar
+          docker save onyxdotapp/onyx-integration:test-${{ github.run_id }} | gzip > onyx-integration-test.tar.gz
 
       - name: Upload Integration Docker image artifact
         uses: actions/upload-artifact@v4
         with:
           name: onyx-integration-test-${{ github.run_id }}
-          path: onyx-integration-test.tar
+          path: onyx-integration-test.tar.gz
           retention-days: 1
 
   integration-tests-mit:
@@ -275,10 +275,10 @@ jobs:
       - name: Load Docker images
         run: |
           # Load images into Docker
-          docker load -i onyx-web-server-test.tar
-          docker load -i onyx-backend-test.tar
-          docker load -i onyx-model-server-test.tar
-          docker load -i onyx-integration-test.tar
+          gunzip -c onyx-web-server-test.tar.gz | docker load
+          gunzip -c onyx-backend-test.tar.gz | docker load
+          gunzip -c onyx-model-server-test.tar.gz | docker load
+          gunzip -c onyx-integration-test.tar.gz | docker load
 
           # Re-tag with expected names for docker-compose
           docker tag onyxdotapp/onyx-web-server:test-${{ github.run_id }} onyxdotapp/onyx-web-server:test
@@ -287,10 +287,10 @@ jobs:
           docker tag onyxdotapp/onyx-integration:test-${{ github.run_id }} onyxdotapp/onyx-integration:test
 
           # Clean up tar files
-          rm onyx-web-server-test.tar
-          rm onyx-backend-test.tar
-          rm onyx-model-server-test.tar
-          rm onyx-integration-test.tar
+          rm onyx-web-server-test.tar.gz
+          rm onyx-backend-test.tar.gz
+          rm onyx-model-server-test.tar.gz
+          rm onyx-integration-test.tar.gz
 
       # NOTE: Use pre-ping/null pool to reduce flakiness due to dropped connections
       - name: Start Docker containers
