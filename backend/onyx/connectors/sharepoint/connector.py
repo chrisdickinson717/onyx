@@ -84,7 +84,7 @@ def load_certificate_from_pfx(
             "thumbprint": certificate.fingerprint(hashes.SHA1()).hex(),
         }
     except Exception as e:
-        print(f"Error loading certificate: {e}")
+        logger.error(f"Error loading certificate: {e}")
         return None
 
 
@@ -101,19 +101,19 @@ def _convert_driveitem_to_document(
     driveitem: DriveItem,
     drive_name: str,
 ) -> Document:
-    content = driveitem.get_content().execute_query().value
 
-    if content is None:
-        raise ValueError("DriveItem content is not available")
     if driveitem.name is None:
         raise ValueError("DriveItem name is required")
     if driveitem.id is None:
         raise ValueError("DriveItem ID is required")
 
+    content = driveitem.get_content().execute_query().value
+
+    if content is None:
+        raise ValueError("DriveItem content is not available")
+
     # Handle different content types
     if isinstance(content, bytes):
-        content_bytes = content
-    elif hasattr(content, "value") and isinstance(content, bytes):
         content_bytes = content
     elif isinstance(content, str):
         content_bytes = content.encode("utf-8")
@@ -425,13 +425,13 @@ class SharepointConnector(LoadConnector, PollConnector, SlimConnector):
         yield doc_batch
 
     def load_credentials(self, credentials: dict[str, Any]) -> dict[str, Any] | None:
-        auth_method = credentials["authentication_method"]
-        sp_client_id = credentials["sp_client_id"]
+        auth_method = credentials.get("authentication_method", "client_secret")
+        sp_client_id = credentials.get("sp_client_id")
         sp_client_secret = credentials.get("sp_client_secret")
-        sp_directory_id = credentials["sp_directory_id"]
+        sp_directory_id = credentials.get("sp_directory_id")
         private_key = credentials.get("private_key")
         sp_certificate_password = credentials.get("sp_certificate_password")
-        sp_tenant_domain = credentials["sp_tenant_domain"]
+        sp_tenant_domain = credentials.get("sp_tenant_domain")
 
         authority_url = f"https://login.microsoftonline.com/{sp_directory_id}"
         if auth_method == "certificate":
@@ -468,12 +468,14 @@ class SharepointConnector(LoadConnector, PollConnector, SlimConnector):
             Acquire token via MSAL
             """
             if self.msal_app is None:
-                raise RuntimeError("MSAL app is not initialized")
+                raise ConnectorValidationError("MSAL app is not initialized")
 
             token = self.msal_app.acquire_token_for_client(
                 scopes=["https://graph.microsoft.com/.default"]
             )
-            return token or {}
+            if token is None:
+                raise ConnectorValidationError("Failed to acquire token for graph")
+            return token
 
         self._graph_client = GraphClient(_acquire_token_for_graph)
         self.sp_tenant_domain = sp_tenant_domain
@@ -511,4 +513,4 @@ if __name__ == "__main__":
         }
     )
     document_batches = connector.load_from_state()
-    print(next(document_batches))
+    logger.info(next(document_batches))
