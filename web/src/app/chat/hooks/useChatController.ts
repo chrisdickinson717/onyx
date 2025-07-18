@@ -92,6 +92,7 @@ import {
   useCurrentChatState,
   useCurrentMessageHistory,
 } from "../stores/useChatSessionStore";
+import { Packet } from "../services/streamingModels";
 
 const TEMP_USER_MESSAGE_ID = -1;
 const TEMP_ASSISTANT_MESSAGE_ID = -2;
@@ -540,6 +541,7 @@ export function useChatController({
     let secondLevelMessageId: number | null = null;
     let isAgentic: boolean = false;
     let files: FileDescriptor[] = [];
+    let packets: Packet[] = [];
 
     let initialFetchDetails: null | {
       user_message_id: number;
@@ -646,6 +648,7 @@ export function useChatController({
                 files: files,
                 toolCall: null,
                 parentMessageId: parentMessage?.messageId || SYSTEM_MESSAGE_ID,
+                packets: [],
               },
             ];
 
@@ -876,6 +879,11 @@ export function useChatController({
               if (stop_reason === StreamStopReason.CONTEXT_LENGTH) {
                 updateCanContinue(true, frozenSessionId);
               }
+            } else if (Object.hasOwn(packet, "obj")) {
+              console.log("Object packet:", JSON.stringify(packet));
+              packets.push(packet as Packet);
+            } else {
+              console.log("Unknown packet:", JSON.stringify(packet));
             }
 
             // on initial message send, we insert a dummy system message
@@ -918,6 +926,7 @@ export function useChatController({
                   initialFetchDetails.assistant_message_id!,
                 ],
                 latestChildMessageId: initialFetchDetails.assistant_message_id,
+                packets: [],
               },
               {
                 isStreamingQuestions: isStreamingQuestions,
@@ -944,6 +953,7 @@ export function useChatController({
                 second_level_generating: second_level_generating,
                 agentic_docs: agenticDocs,
                 is_agentic: isAgentic,
+                packets: packets,
               },
               ...(includeAgentic
                 ? [
@@ -955,6 +965,7 @@ export function useChatController({
                       toolCall: null,
                       parentMessageId:
                         initialFetchDetails.assistant_message_id!,
+                      packets: [],
                     },
                   ]
                 : []),
@@ -975,6 +986,7 @@ export function useChatController({
             files: currentMessageFiles,
             toolCall: null,
             parentMessageId: parentMessage?.messageId || SYSTEM_MESSAGE_ID,
+            packets: [],
           },
           {
             messageId:
@@ -986,6 +998,7 @@ export function useChatController({
             toolCall: null,
             parentMessageId:
               initialFetchDetails?.user_message_id || TEMP_USER_MESSAGE_ID,
+            packets: [],
           },
         ],
         completeMessageTreeOverride: currentMessageTreeLocal,

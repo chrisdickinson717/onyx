@@ -16,6 +16,7 @@ import { HealthCheckBanner } from "@/components/health/healthcheck";
 import {
   getCitedDocumentsFromMessage,
   getHumanAndAIMessageFromMessageNumber,
+  handleChatFeedback,
   personaIncludesRetrieval,
   useScrollonStream,
 } from "../services/lib";
@@ -107,6 +108,7 @@ import {
   useChatSessionSharedStatus,
   useHasSentLocalUserMessage,
 } from "../stores/useChatSessionStore";
+import { SimpleMessage } from "../message/messageComponents/SimpleMessage";
 
 export enum UploadIntent {
   ATTACH_TO_MESSAGE, // For files uploaded via ChatInputBar (paste, drag/drop)
@@ -1264,288 +1266,28 @@ export function ChatPage({
                                         : null
                                     }
                                   >
-                                    {message.is_agentic ? (
-                                      <AgenticMessage
-                                        resubmit={handleResubmitLastMessage}
-                                        error={uncaughtError}
-                                        isStreamingQuestions={
-                                          message.isStreamingQuestions ?? false
-                                        }
-                                        isGenerating={
-                                          message.is_generating ?? false
-                                        }
-                                        docSidebarToggled={
-                                          documentSidebarVisible &&
-                                          (selectedMessageForDocDisplay ==
-                                            message.messageId ||
-                                            selectedMessageForDocDisplay ==
-                                              secondLevelMessage?.messageId)
-                                        }
-                                        secondLevelGenerating={
-                                          (message.second_level_generating &&
-                                            currentChatState !== "input") ||
-                                          false
-                                        }
-                                        secondLevelSubquestions={message.sub_questions?.filter(
-                                          (subQuestion) =>
-                                            subQuestion.level === 1
-                                        )}
-                                        secondLevelAssistantMessage={
-                                          (message.second_level_message &&
-                                          message.second_level_message.length >
-                                            0
-                                            ? message.second_level_message
-                                            : secondLevelAssistantMessage) ||
-                                          undefined
-                                        }
-                                        subQuestions={
-                                          message.sub_questions?.filter(
-                                            (subQuestion) =>
-                                              subQuestion.level === 0
-                                          ) || []
-                                        }
-                                        agenticDocs={
-                                          message.agentic_docs || agenticDocs
-                                        }
-                                        docs={
-                                          message?.documents &&
-                                          message?.documents.length > 0
-                                            ? message?.documents
-                                            : parentMessage?.documents
-                                        }
-                                        setPresentingDocument={
-                                          setPresentingDocument
-                                        }
-                                        continueGenerating={
-                                          (i == messageHistory.length - 1 &&
-                                            canContinue) ||
-                                          false
-                                            ? continueGenerating
-                                            : undefined
-                                        }
-                                        overriddenModel={
-                                          message.overridden_model
-                                        }
-                                        regenerate={createRegenerator({
+                                    <SimpleMessage
+                                      rawPackets={message.packets}
+                                      chatState={{
+                                        handleFeedback: (feedback) =>
+                                          setCurrentFeedback([
+                                            feedback,
+                                            message.messageId,
+                                          ]),
+                                        assistant: liveAssistant,
+                                        docs: message.documents,
+                                        userFiles: [], // TODO: Extract user files from message context
+                                        citations: message.citations,
+                                        setPresentingDocument:
+                                          setPresentingDocument,
+                                        regenerate: createRegenerator({
                                           messageId: message.messageId,
-                                          parentMessage: parentMessage!,
-                                        })}
-                                        otherMessagesCanSwitchTo={
-                                          parentMessage?.childrenMessageIds ||
-                                          []
-                                        }
-                                        onMessageSelection={onMessageSelection}
-                                        isActive={
-                                          messageHistory.length - 1 == i ||
-                                          messageHistory.length - 2 == i
-                                        }
-                                        toggleDocumentSelection={(
-                                          second: boolean
-                                        ) => {
-                                          if (
-                                            (!second &&
-                                              !documentSidebarVisible) ||
-                                            (documentSidebarVisible &&
-                                              selectedMessageForDocDisplay ===
-                                                message.messageId)
-                                          ) {
-                                            toggleDocumentSidebar();
-                                          }
-                                          if (
-                                            (second &&
-                                              !documentSidebarVisible) ||
-                                            (documentSidebarVisible &&
-                                              selectedMessageForDocDisplay ===
-                                                secondLevelMessage?.messageId)
-                                          ) {
-                                            toggleDocumentSidebar();
-                                          }
-
-                                          updateCurrentSelectedMessageForDocDisplay(
-                                            second
-                                              ? secondLevelMessage?.messageId ||
-                                                  null
-                                              : message.messageId
-                                          );
-                                        }}
-                                        currentPersona={liveAssistant}
-                                        alternativeAssistant={
-                                          currentAlternativeAssistant
-                                        }
-                                        messageId={message.messageId}
-                                        content={message.message}
-                                        files={message.files}
-                                        query={
-                                          messageHistory[i]?.query || undefined
-                                        }
-                                        citedDocuments={getCitedDocumentsFromMessage(
-                                          message
-                                        )}
-                                        toolCall={message.toolCall}
-                                        isComplete={
-                                          i !== messageHistory.length - 1 ||
-                                          (currentChatState != "streaming" &&
-                                            currentChatState != "toolBuilding")
-                                        }
-                                        handleFeedback={
-                                          i === messageHistory.length - 1 &&
-                                          currentChatState != "input"
-                                            ? undefined
-                                            : (feedbackType: FeedbackType) =>
-                                                setCurrentFeedback([
-                                                  feedbackType,
-                                                  message.messageId as number,
-                                                ])
-                                        }
-                                      />
-                                    ) : (
-                                      <AIMessage
-                                        userKnowledgeFiles={userFiles}
-                                        docs={
-                                          message?.documents &&
-                                          message?.documents.length > 0
-                                            ? message?.documents
-                                            : parentMessage?.documents
-                                        }
-                                        setPresentingDocument={
-                                          setPresentingDocument
-                                        }
-                                        index={i}
-                                        continueGenerating={
-                                          (i == messageHistory.length - 1 &&
-                                            canContinue) ||
-                                          false
-                                            ? continueGenerating
-                                            : undefined
-                                        }
-                                        overriddenModel={
-                                          message.overridden_model
-                                        }
-                                        regenerate={createRegenerator({
-                                          messageId: message.messageId,
-                                          parentMessage: parentMessage!,
-                                        })}
-                                        otherMessagesCanSwitchTo={
-                                          parentMessage?.childrenMessageIds ||
-                                          []
-                                        }
-                                        onMessageSelection={onMessageSelection}
-                                        isActive={
-                                          messageHistory.length - 1 == i
-                                        }
-                                        selectedDocuments={selectedDocuments}
-                                        toggleDocumentSelection={() => {
-                                          if (
-                                            !documentSidebarVisible ||
-                                            (documentSidebarVisible &&
-                                              selectedMessageForDocDisplay ===
-                                                message.messageId)
-                                          ) {
-                                            toggleDocumentSidebar();
-                                          }
-
-                                          updateCurrentSelectedMessageForDocDisplay(
-                                            message.messageId
-                                          );
-                                        }}
-                                        currentPersona={liveAssistant}
-                                        alternativeAssistant={
-                                          currentAlternativeAssistant
-                                        }
-                                        messageId={message.messageId}
-                                        content={message.message}
-                                        files={message.files}
-                                        query={
-                                          messageHistory[i]?.query || undefined
-                                        }
-                                        citedDocuments={getCitedDocumentsFromMessage(
-                                          message
-                                        )}
-                                        toolCall={message.toolCall}
-                                        isComplete={
-                                          i !== messageHistory.length - 1 ||
-                                          (currentChatState != "streaming" &&
-                                            currentChatState != "toolBuilding")
-                                        }
-                                        hasDocs={
-                                          (message.documents &&
-                                            message.documents.length > 0) ===
-                                          true
-                                        }
-                                        handleFeedback={
-                                          i === messageHistory.length - 1 &&
-                                          currentChatState != "input"
-                                            ? undefined
-                                            : (feedbackType) =>
-                                                setCurrentFeedback([
-                                                  feedbackType,
-                                                  message.messageId as number,
-                                                ])
-                                        }
-                                        handleSearchQueryEdit={
-                                          i === messageHistory.length - 1 &&
-                                          currentChatState == "input"
-                                            ? (newQuery) => {
-                                                if (!previousMessage) {
-                                                  setPopup({
-                                                    type: "error",
-                                                    message:
-                                                      "Cannot edit query of first message - please refresh the page and try again.",
-                                                  });
-                                                  return;
-                                                }
-                                                if (
-                                                  previousMessage.messageId ===
-                                                  null
-                                                ) {
-                                                  setPopup({
-                                                    type: "error",
-                                                    message:
-                                                      "Cannot edit query of a pending message - please wait a few seconds and try again.",
-                                                  });
-                                                  return;
-                                                }
-                                                onSubmit({
-                                                  message: "", // dummy value, overridden by messageIdToResend
-                                                  selectedFiles: [],
-                                                  selectedFolders: [],
-                                                  currentMessageFiles: [],
-                                                  useAgentSearch: false,
-
-                                                  messageIdToResend:
-                                                    previousMessage.messageId,
-                                                  queryOverride: newQuery,
-                                                });
-                                              }
-                                            : undefined
-                                        }
-                                        handleForceSearch={() => {
-                                          if (
-                                            previousMessage &&
-                                            previousMessage.messageId
-                                          ) {
-                                            createRegenerator({
-                                              messageId: message.messageId,
-                                              parentMessage: parentMessage!,
-                                              forceSearch: true,
-                                            })(llmManager.currentLlm);
-                                          } else {
-                                            setPopup({
-                                              type: "error",
-                                              message:
-                                                "Failed to force search - please refresh the page and try again.",
-                                            });
-                                          }
-                                        }}
-                                        retrievalDisabled={
-                                          currentAlternativeAssistant
-                                            ? !personaIncludesRetrieval(
-                                                currentAlternativeAssistant!
-                                              )
-                                            : !retrievalEnabled
-                                        }
-                                      />
-                                    )}
+                                          parentMessage: previousMessage!,
+                                        }),
+                                        overriddenModel:
+                                          llmManager.currentLlm?.modelName,
+                                      }}
+                                    />
                                   </div>
                                 );
                               } else {

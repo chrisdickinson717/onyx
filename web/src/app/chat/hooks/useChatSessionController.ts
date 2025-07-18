@@ -179,7 +179,10 @@ export function useChatSessionController({
       // Always set the current session when we have an existing chat session ID
       setCurrentSession(chatSession.chat_session_id);
 
-      const newMessageMap = processRawChatHistory(chatSession.messages);
+      const newMessageMap = processRawChatHistory(
+        chatSession.messages,
+        chatSession.packets
+      );
       const newMessageHistory = getLatestMessageChain(newMessageMap);
 
       // Update message history except for edge where where

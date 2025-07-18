@@ -91,6 +91,7 @@ export function upsertMessages(
         parentMessageId: null,
         childrenMessageIds: [firstMessageId],
         latestChildMessageId: firstMessageId,
+        packets: [],
       };
       newMessages.set(dummySystemMessage.messageId, dummySystemMessage);
     }

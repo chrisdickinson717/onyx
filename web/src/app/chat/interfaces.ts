@@ -4,6 +4,7 @@ import {
   SearchOnyxDocument,
   StreamStopReason,
 } from "@/lib/search/interfaces";
+import { Packet } from "./services/streamingModels";
 
 export type FeedbackType = "like" | "dislike";
 export type ChatState =
@@ -125,6 +126,9 @@ export interface Message {
   second_level_subquestions?: SubQuestionDetail[] | null;
   isImprovement?: boolean | null;
   isStreamingQuestions?: boolean;
+
+  // new gen
+  packets: Packet[];
 }
 
 export interface BackendChatSession {
@@ -140,6 +144,8 @@ export interface BackendChatSession {
   shared_status: ChatSessionSharedStatus;
   current_temperature_override: number | null;
   current_alternate_model?: string;
+
+  packets: Packet[][];
 }
 
 export interface BackendMessage {

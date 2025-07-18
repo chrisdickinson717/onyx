@@ -107,6 +107,13 @@ from onyx.llm.utils import litellm_exception_to_error_msg
 from onyx.natural_language_processing.utils import get_tokenizer
 from onyx.server.query_and_chat.models import ChatMessageDetail
 from onyx.server.query_and_chat.models import CreateChatMessageRequest
+from onyx.server.query_and_chat.streaming_models import MessageDelta
+from onyx.server.query_and_chat.streaming_models import MessageEnd
+from onyx.server.query_and_chat.streaming_models import MessageStart
+from onyx.server.query_and_chat.streaming_models import Packet
+from onyx.server.query_and_chat.streaming_models import SearchToolEnd
+from onyx.server.query_and_chat.streaming_models import SearchToolStart
+from onyx.server.query_and_chat.streaming_models import Stop
 from onyx.server.utils import get_json_line
 from onyx.tools.force import ForceUseTool
 from onyx.tools.models import SearchToolOverrideKwargs
@@ -150,6 +157,7 @@ from onyx.tools.tool_implementations.search.search_tool import SearchTool
 from onyx.tools.tool_implementations.search.search_tool import (
     SECTION_RELEVANCE_LIST_ID,
 )
+from onyx.tools.tool_implementations.search.search_utils import section_to_llm_doc
 from onyx.tools.tool_runner import ToolCallFinalResult
 from onyx.utils.logger import setup_logger
 from onyx.utils.long_term_log import LongTermLogger
@@ -398,7 +406,6 @@ ChatPacket = (
     | LLMRelevanceFilterResponse
     | FinalUsedContextDocsResponse
     | ChatMessageDetail
-    | OnyxAnswerPiece
     | AllCitations
     | CitationInfo
     | FileChatDisplay
@@ -409,6 +416,7 @@ ChatPacket = (
     | StreamStopInfo
     | AgentSearchPacket
     | UserKnowledgeFilePacket
+    | Packet
 )
 ChatPacketStream = Iterator[ChatPacket]
 
@@ -1017,7 +1025,35 @@ def stream_chat_message_objects(
             lambda: AnswerPostInfo(ai_message_files=[])
         )
         refined_answer_improvement = True
+
+        has_transmitted_answer_piece = False
+        current_text_ind = None
+        next_text_ind = 1
         for packet in answer.processed_streamed_output:
+            if isinstance(packet, ToolResponse):
+                if packet.id == SEARCH_RESPONSE_SUMMARY_ID:
+                    yield Packet(
+                        ind=next_text_ind,
+                        obj=SearchToolStart(
+                            query=cast(
+                                SearchResponseSummary, packet.response
+                            ).rephrased_query
+                            or ""
+                        ),
+                    )
+                    yield Packet(
+                        ind=next_text_ind,
+                        obj=SearchToolEnd(
+                            results=[
+                                section_to_llm_doc(s)
+                                for s in cast(
+                                    SearchResponseSummary, packet.response
+                                ).top_sections
+                            ]
+                        ),
+                    )
+                    next_text_ind += 1
+
             if isinstance(packet, ToolResponse):
                 info_by_subq = yield from _process_tool_response(
                     packet=packet,
@@ -1047,7 +1083,41 @@ def stream_chat_message_objects(
                         SubQuestionKey(level=level, question_num=level_question_num)
                     ]
                     info.tool_result = packet
-                yield cast(ChatPacket, packet)
+
+                if isinstance(packet, OnyxAnswerPiece):
+                    if current_text_ind is None:
+                        current_text_ind = next_text_ind
+                        next_text_ind += 1
+
+                    if has_transmitted_answer_piece:
+                        if packet.answer_piece is None:
+                            yield Packet(
+                                ind=current_text_ind,
+                                obj=MessageEnd(),
+                            )
+                            current_text_ind = next_text_ind
+                            next_text_ind += 1
+                            has_transmitted_answer_piece = False
+                        else:
+                            yield Packet(
+                                ind=current_text_ind,
+                                obj=MessageDelta(
+                                    content=packet.answer_piece or "",
+                                ),
+                            )
+
+                    elif packet.answer_piece:
+                        yield Packet(
+                            ind=current_text_ind,
+                            obj=MessageStart(
+                                id=str(reserved_message_id),
+                                content=packet.answer_piece,
+                            ),
+                        )
+                        has_transmitted_answer_piece = True
+                        next_text_ind = max(next_text_ind, current_text_ind + 1)
+                else:
+                    yield cast(ChatPacket, packet)
 
     except ValueError as e:
         logger.exception("Failed to process chat message.")
@@ -1093,6 +1163,9 @@ def stream_chat_message_objects(
         chat_session_id=chat_session_id,
         refined_answer_improvement=refined_answer_improvement,
     )
+
+    # Yield STOP packet to indicate streaming is complete
+    yield Packet(ind=0, obj=Stop())
 
 
 def _post_llm_answer_processing(

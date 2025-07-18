@@ -35,6 +35,7 @@ import { Settings } from "../../admin/settings/interfaces";
 import { INTERNET_SEARCH_TOOL_ID } from "../components/tools/constants";
 import { SEARCH_TOOL_ID } from "../components/tools/constants";
 import { IIMAGE_GENERATION_TOOL_ID } from "../components/tools/constants";
+import { Packet } from "./streamingModels";
 
 interface ChatRetentionInfo {
   chatRetentionDays: number;
@@ -144,7 +145,6 @@ export const isPacketType = (data: any): data is PacketType => {
 export type PacketType =
   | ToolCallMetadata
   | BackendMessage
-  | AnswerPiecePacket
   | DocumentInfoPacket
   | DocumentsResponse
   | FileChatDisplay
@@ -158,7 +158,8 @@ export type PacketType =
   | ExtendedToolResponse
   | RefinedAnswerImprovement
   | AgenticMessageResponseIDInfo
-  | UserKnowledgeFilePacket;
+  | UserKnowledgeFilePacket
+  | Packet;
 
 export interface SendMessageParams {
   regenerate: boolean;
@@ -460,12 +461,20 @@ export function groupSessionsByDateRange(chatSessions: ChatSession[]) {
 }
 
 export function processRawChatHistory(
-  rawMessages: BackendMessage[]
+  rawMessages: BackendMessage[],
+  packets: Packet[][]
 ): Map<number, Message> {
   const messages: Map<number, Message> = new Map();
   const parentMessageChildrenMap: Map<number, number[]> = new Map();
 
-  rawMessages.forEach((messageInfo) => {
+  let assistantMessageInd = 0;
+
+  rawMessages.forEach((messageInfo, ind) => {
+    const packetsForMessage = packets[assistantMessageInd];
+    if (messageInfo.message_type === "assistant") {
+      assistantMessageInd++;
+    }
+
     const hasContextDocs =
       (messageInfo?.context_docs?.top_documents || []).length > 0;
     let retrievalType;
@@ -511,6 +520,7 @@ export function processRawChatHistory(
       isImprovement:
         (messageInfo.refined_answer_improvement as unknown as boolean) || false,
       is_agentic: messageInfo.is_agentic,
+      packets: packetsForMessage || [],
     };
 
     messages.set(messageInfo.message_id, message);
