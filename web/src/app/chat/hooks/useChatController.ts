@@ -28,7 +28,10 @@ import {
   setMessageAsLatest,
   upsertMessages,
 } from "../services/messageTree";
-import { Persona } from "@/app/admin/assistants/interfaces";
+import {
+  MinimalPersonaSnapshot,
+  Persona,
+} from "@/app/admin/assistants/interfaces";
 import {
   SEARCH_PARAM_NAMES,
   shouldSubmitOnLoad,
@@ -103,8 +106,8 @@ interface RegenerationRequest {
 interface UseChatControllerProps {
   filterManager: FilterManager;
   llmManager: LlmManager;
-  liveAssistant: Persona | undefined;
-  availableAssistants: Persona[];
+  liveAssistant: MinimalPersonaSnapshot | undefined;
+  availableAssistants: MinimalPersonaSnapshot[];
   existingChatSessionId: string | null;
   selectedDocuments: OnyxDocument[];
   searchParams: ReadonlyURLSearchParams;

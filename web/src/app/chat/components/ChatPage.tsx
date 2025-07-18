@@ -195,15 +195,10 @@ export function ChatPage({
 
     filterManager.buildFiltersFromQueryString(
       newSearchParams.toString(),
-      availableSources,
+      sources,
       documentSets.map((ds) => ds.name),
       tags
     );
-
-    const fileDescriptorString = newSearchParams?.get(SEARCH_PARAM_NAMES.FILES);
-    const overrideFileDescriptors: FileDescriptor[] = fileDescriptorString
-      ? JSON.parse(decodeURIComponent(fileDescriptorString))
-      : [];
 
     newSearchParams.delete(SEARCH_PARAM_NAMES.SEND_ON_LOAD);
 
@@ -221,15 +216,10 @@ export function ChatPage({
     }
   };
 
-  const {
-    selectedAssistant,
-    setSelectedAssistantFromId,
-    alternativeAssistant,
-    setAlternativeAssistant,
-    liveAssistant,
-  } = useAssistantController({
-    selectedChatSession,
-  });
+  const { selectedAssistant, setSelectedAssistantFromId, liveAssistant } =
+    useAssistantController({
+      selectedChatSession,
+    });
 
   const [presentingDocument, setPresentingDocument] =
     useState<MinimalOnyxDocument | null>(null);
@@ -617,10 +607,7 @@ export function ChatPage({
   const retrievalEnabled = useMemo(() => {
     if (liveAssistant) {
       return liveAssistant.tools.some(
-        (tool) =>
-          tool.in_code_tool_id === SEARCH_TOOL_ID &&
-          liveAssistant.user_file_ids?.length == 0 &&
-          liveAssistant.user_folder_ids?.length == 0
+        (tool) => tool.in_code_tool_id === SEARCH_TOOL_ID
       );
     }
     return false;
@@ -1294,10 +1281,6 @@ export function ChatPage({
                                             selectedMessageForDocDisplay ==
                                               secondLevelMessage?.messageId)
                                         }
-                                        isImprovement={
-                                          message.isImprovement ||
-                                          nextMessage?.isImprovement
-                                        }
                                         secondLevelGenerating={
                                           (message.second_level_generating &&
                                             currentChatState !== "input") ||
@@ -1324,21 +1307,6 @@ export function ChatPage({
                                         agenticDocs={
                                           message.agentic_docs || agenticDocs
                                         }
-                                        toggleDocDisplay={(
-                                          agentic: boolean
-                                        ) => {
-                                          if (agentic) {
-                                            updateCurrentSelectedMessageForDocDisplay(
-                                              message.messageId
-                                            );
-                                          } else {
-                                            updateCurrentSelectedMessageForDocDisplay(
-                                              secondLevelMessage
-                                                ? secondLevelMessage.messageId
-                                                : null
-                                            );
-                                          }
-                                        }}
                                         docs={
                                           message?.documents &&
                                           message?.documents.length > 0
@@ -1371,7 +1339,6 @@ export function ChatPage({
                                           messageHistory.length - 1 == i ||
                                           messageHistory.length - 2 == i
                                         }
-                                        selectedDocuments={selectedDocuments}
                                         toggleDocumentSelection={(
                                           second: boolean
                                         ) => {
@@ -1548,8 +1515,6 @@ export function ChatPage({
                                                   messageIdToResend:
                                                     previousMessage.messageId,
                                                   queryOverride: newQuery,
-                                                  alternativeAssistantOverride:
-                                                    currentAlternativeAssistant,
                                                 });
                                               }
                                             : undefined
@@ -1729,11 +1694,9 @@ export function ChatPage({
                                 });
                               }}
                               chatState={currentChatState}
-                              alternativeAssistant={alternativeAssistant}
                               selectedAssistant={
                                 selectedAssistant || liveAssistant
                               }
-                              setAlternativeAssistant={setAlternativeAssistant}
                               setFiles={setCurrentMessageFiles}
                               handleFileUpload={handleMessageSpecificFileUpload}
                               textAreaRef={textAreaRef}

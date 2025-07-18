@@ -1,12 +1,12 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { FiPlusCircle, FiPlus, FiX, FiFilter } from "react-icons/fi";
+import { FiPlusCircle, FiPlus, FiFilter } from "react-icons/fi";
 import { FiLoader } from "react-icons/fi";
 import { ChatInputOption } from "./ChatInputOption";
 import { MinimalPersonaSnapshot } from "@/app/admin/assistants/interfaces";
 import LLMPopover from "./LLMPopover";
 import { InputPrompt } from "@/app/chat/interfaces";
 
-import { FilterManager, getDisplayNameForModel, LlmManager } from "@/lib/hooks";
+import { FilterManager, LlmManager } from "@/lib/hooks";
 import { useChatContext } from "@/components/context/ChatContext";
 import { ChatFileType, FileDescriptor } from "../../interfaces";
 import {
@@ -16,14 +16,12 @@ import {
   StopGeneratingIcon,
 } from "@/components/icons/icons";
 import { OnyxDocument, SourceMetadata } from "@/lib/search/interfaces";
-import { AssistantIcon } from "@/components/assistants/AssistantIcon";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Hoverable } from "@/components/Hoverable";
 import { ChatState } from "@/app/chat/interfaces";
 import { useAssistantsContext } from "@/components/context/AssistantsContext";
 import { CalendarIcon, TagIcon, XIcon, FolderIcon } from "lucide-react";
@@ -37,7 +35,6 @@ import { useUser } from "@/components/user/UserProvider";
 import { AgenticToggle } from "./AgenticToggle";
 import { SettingsContext } from "@/components/settings/SettingsProvider";
 import { useDocumentsContext } from "@/app/chat/my-documents/DocumentsContext";
-import { getProviderIcon } from "@/app/admin/configuration/llm/utils";
 import { UnconfiguredLlmProviderText } from "@/components/chat/UnconfiguredLlmProviderText";
 
 const MAX_INPUT_HEIGHT = 200;
@@ -181,12 +178,10 @@ interface ChatInputBarProps {
   onSubmit: () => void;
   llmManager: LlmManager;
   chatState: ChatState;
-  alternativeAssistant: MinimalPersonaSnapshot | null;
+
   // assistants
   selectedAssistant: MinimalPersonaSnapshot;
-  setAlternativeAssistant: (
-    alternativeAssistant: MinimalPersonaSnapshot | null
-  ) => void;
+
   toggleDocumentSidebar: () => void;
   setFiles: (files: FileDescriptor[]) => void;
   handleFileUpload: (files: File[]) => void;
@@ -216,12 +211,10 @@ export function ChatInputBar({
 
   // assistants
   selectedAssistant,
-  setAlternativeAssistant,
 
   setFiles,
   handleFileUpload,
   textAreaRef,
-  alternativeAssistant,
   availableSources,
   availableDocumentSets,
   availableTags,
@@ -307,14 +300,6 @@ export function ChatInputBar({
     };
   }, []);
 
-  const updatedTaggedAssistant = (assistant: MinimalPersonaSnapshot) => {
-    setAlternativeAssistant(
-      assistant.id == selectedAssistant.id ? null : assistant
-    );
-    hideSuggestions();
-    setMessage("");
-  };
-
   const handleAssistantInput = (text: string) => {
     if (!text.startsWith("@")) {
       hideSuggestions();
@@ -372,10 +357,6 @@ export function ChatInputBar({
     }
   }
 
-  const assistantTagOptions = assistantOptions.filter((assistant) =>
-    assistant.name.toLowerCase().startsWith(startFilterAt)
-  );
-
   let startFilterSlash = "";
   if (message !== undefined) {
     const message_segments = message
@@ -395,19 +376,14 @@ export function ChatInputBar({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (
-      ((showSuggestions && assistantTagOptions.length > 0) || showPrompts) &&
+      (showSuggestions || showPrompts) &&
       (e.key === "Tab" || e.key == "Enter")
     ) {
       e.preventDefault();
 
-      if (
-        (tabbingIconIndex == assistantTagOptions.length && showSuggestions) ||
-        (tabbingIconIndex == filteredPrompts.length && showPrompts)
-      ) {
+      if (tabbingIconIndex == filteredPrompts.length && showPrompts) {
         if (showPrompts) {
           window.open("/chat/input-prompts", "_self");
-        } else {
-          window.open("/assistants/new", "_self");
         }
       } else {
         if (showPrompts) {
@@ -415,12 +391,6 @@ export function ChatInputBar({
             filteredPrompts[tabbingIconIndex >= 0 ? tabbingIconIndex : 0];
           if (selectedPrompt) {
             updateInputPrompt(selectedPrompt);
-          }
-        } else {
-          const option =
-            assistantTagOptions[tabbingIconIndex >= 0 ? tabbingIconIndex : 0];
-          if (option) {
-            updatedTaggedAssistant(option);
           }
         }
       }
@@ -432,10 +402,7 @@ export function ChatInputBar({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setTabbingIconIndex((tabbingIconIndex) =>
-        Math.min(
-          tabbingIconIndex + 1,
-          showPrompts ? filteredPrompts.length : assistantTagOptions.length
-        )
+        Math.min(tabbingIconIndex + 1, showPrompts ? filteredPrompts.length : 0)
       );
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
@@ -496,51 +463,6 @@ export function ChatInputBar({
             mx-auto
           "
         >
-          {showSuggestions && assistantTagOptions.length > 0 && (
-            <div
-              ref={suggestionsRef}
-              className="text-sm absolute w-[calc(100%-2rem)] top-0 transform -translate-y-full"
-            >
-              <div className="rounded-lg py-1 overflow-y-auto max-h-[200px] sm-1.5 bg-input-background border border-border dark:border-none shadow-lg px-1.5 mt-2 z-10">
-                {assistantTagOptions.map((currentAssistant, index) => (
-                  <button
-                    key={index}
-                    className={`px-2 ${
-                      tabbingIconIndex == index &&
-                      "bg-neutral-200 dark:bg-neutral-800"
-                    } rounded items-center rounded-lg content-start flex gap-x-1 py-2 w-full hover:bg-neutral-200/90 dark:hover:bg-neutral-800/90 cursor-pointer`}
-                    onClick={() => {
-                      updatedTaggedAssistant(currentAssistant);
-                    }}
-                  >
-                    <AssistantIcon size={16} assistant={currentAssistant} />
-                    <p className="text-text-darker font-semibold">
-                      {currentAssistant.name}
-                    </p>
-                    <p className="text-text-dark font-light line-clamp-1">
-                      {currentAssistant.id == selectedAssistant.id &&
-                        "(default) "}
-                      {currentAssistant.description}
-                    </p>
-                  </button>
-                ))}
-
-                <a
-                  key={assistantTagOptions.length}
-                  target="_self"
-                  className={`${
-                    tabbingIconIndex == assistantTagOptions.length &&
-                    "bg-neutral-200 dark:bg-neutral-800"
-                  } rounded rounded-lg px-3 flex gap-x-1 py-2 w-full items-center hover:bg-neutral-200/90 dark:hover:bg-neutral-800/90 cursor-pointer`}
-                  href="/assistants/new"
-                >
-                  <FiPlus size={17} />
-                  <p>Create a new assistant</p>
-                </a>
-              </div>
-            </div>
-          )}
-
           {showPrompts && user?.preferences?.shortcut_enabled && (
             <div
               ref={suggestionsRef}
@@ -606,26 +528,6 @@ export function ChatInputBar({
               [&:has(textarea:focus)]::ring-black
             "
           >
-            {alternativeAssistant && (
-              <div className="flex bg-background flex-wrap gap-x-2 px-2 pt-1.5 w-full">
-                <div
-                  ref={interactionsRef}
-                  className="p-2 rounded-t-lg items-center flex w-full"
-                >
-                  <AssistantIcon assistant={alternativeAssistant} />
-                  <p className="ml-3 text-strong my-auto">
-                    {alternativeAssistant.name}
-                  </p>
-                  <div className="flex gap-x-1 ml-auto">
-                    <Hoverable
-                      icon={FiX}
-                      onClick={() => setAlternativeAssistant(null)}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
             <textarea
               onPaste={handlePaste}
               onKeyDownCapture={handleKeyDown}

@@ -229,7 +229,6 @@ export const useChatSessionStore = create<ChatSessionStore>()((set, get) => ({
     sessionId: string,
     messageTree: MessageTreeState
   ) => {
-    console.log("updateSessionMessageTree", sessionId, messageTree);
     get().updateSessionData(sessionId, { messageTree });
   },
 

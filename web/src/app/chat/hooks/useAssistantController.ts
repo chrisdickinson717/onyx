@@ -1,4 +1,4 @@
-import { Persona } from "@/app/admin/assistants/interfaces";
+import { MinimalPersonaSnapshot } from "@/app/admin/assistants/interfaces";
 import { useMemo, useState } from "react";
 import { ChatSession } from "../interfaces";
 import { useAssistantsContext } from "@/components/context/AssistantsContext";
@@ -23,7 +23,7 @@ export function useAssistantController({
 
   const existingChatSessionAssistantId = selectedChatSession?.persona_id;
   const [selectedAssistant, setSelectedAssistant] = useState<
-    Persona | undefined
+    MinimalPersonaSnapshot | undefined
   >(
     // NOTE: look through available assistants here, so that even if the user
     // has hidden this assistant it still shows the correct assistant when
@@ -39,28 +39,15 @@ export function useAssistantController({
         : undefined
   );
 
-  // when the user tags an assistant, we store it here
-  const [alternativeAssistant, setAlternativeAssistant] =
-    useState<Persona | null>(null);
-
   // Current assistant is decided based on this ordering
   // 1. Alternative assistant (assistant selected explicitly by user)
   // 2. Selected assistant (assistnat default in this chat session)
   // 3. First pinned assistants (ordered list of pinned assistants)
   // 4. Available assistants (ordered list of available assistants)
   // Relevant test: `live_assistant.spec.ts`
-  const liveAssistant: Persona | undefined = useMemo(
-    () =>
-      alternativeAssistant ||
-      selectedAssistant ||
-      pinnedAssistants[0] ||
-      availableAssistants[0],
-    [
-      alternativeAssistant,
-      selectedAssistant,
-      pinnedAssistants,
-      availableAssistants,
-    ]
+  const liveAssistant: MinimalPersonaSnapshot | undefined = useMemo(
+    () => selectedAssistant || pinnedAssistants[0] || availableAssistants[0],
+    [selectedAssistant, pinnedAssistants, availableAssistants]
   );
 
   const setSelectedAssistantFromId = (
@@ -88,10 +75,6 @@ export function useAssistantController({
     // main assistant selection
     selectedAssistant,
     setSelectedAssistantFromId,
-
-    // takes priority over selectedAssistant
-    alternativeAssistant,
-    setAlternativeAssistant,
 
     // final computed assistant
     liveAssistant,
