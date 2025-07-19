@@ -10,10 +10,12 @@ import {
   Packet,
   PacketType,
   SearchToolPacket,
+  ImageToolPacket,
 } from "../../services/streamingModels";
 import { FullChatState } from "./interfaces";
-import { MessageTextRenderer } from "./MessageTextRenderer";
-import { SearchToolRenderer } from "./SearchToolRenderer";
+import { MessageTextRenderer } from "./renderers/MessageTextRenderer";
+import { SearchToolRenderer } from "./renderers/SearchToolRenderer";
+import { ImageToolRenderer } from "./renderers/ImageToolRenderer";
 
 // Different types of chat packets using discriminated unions
 export interface GroupedPackets {
@@ -32,6 +34,13 @@ function isSearchToolPacket(packet: Packet): packet is SearchToolPacket {
   return (
     packet.obj.type === PacketType.SEARCH_TOOL_START ||
     packet.obj.type === PacketType.SEARCH_TOOL_END
+  );
+}
+
+function isImageToolPacket(packet: Packet): packet is ImageToolPacket {
+  return (
+    packet.obj.type === PacketType.IMAGE_TOOL_START ||
+    packet.obj.type === PacketType.IMAGE_TOOL_END
   );
 }
 
@@ -54,6 +63,13 @@ export function renderMessageComponent(
     return (
       <SearchToolRenderer
         packets={groupedPackets.packets as SearchToolPacket[]}
+        state={fullChatState}
+      />
+    );
+  } else if (isImageToolPacket(groupedPackets.packets[0])) {
+    return (
+      <ImageToolRenderer
+        packets={groupedPackets.packets as ImageToolPacket[]}
         state={fullChatState}
       />
     );

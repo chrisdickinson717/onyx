@@ -1,6 +1,8 @@
 from onyx.chat.models import LlmDoc
 from onyx.configs.constants import MessageType
 from onyx.server.query_and_chat.models import ChatMessageDetail
+from onyx.server.query_and_chat.streaming_models import ImageToolEnd
+from onyx.server.query_and_chat.streaming_models import ImageToolStart
 from onyx.server.query_and_chat.streaming_models import MessageDelta
 from onyx.server.query_and_chat.streaming_models import MessageEnd
 from onyx.server.query_and_chat.streaming_models import MessageStart
@@ -55,6 +57,30 @@ def create_simplified_packets_for_message(
         search_tool_end = SearchToolEnd(results=llm_docs)
         packets.append(Packet(ind=current_index, obj=search_tool_end))
         current_index += 1
+
+    # Create ImageTool packets if there are image files
+    if message.files:
+        from onyx.file_store.models import ChatFileType
+
+        image_files = [f for f in message.files if f["type"] == ChatFileType.IMAGE]
+        if image_files:
+            image_tool_start = ImageToolStart(prompt="Generated images")
+            packets.append(Packet(ind=current_index, obj=image_tool_start))
+
+            images = []
+            for file in image_files:
+                images.append(
+                    {
+                        "id": file["id"],
+                        "url": "",  # URL will be constructed by frontend
+                        "prompt": file.get("name", "Generated image")
+                        or "Generated image",
+                    }
+                )
+
+            image_tool_end = ImageToolEnd(images=images)
+            packets.append(Packet(ind=current_index, obj=image_tool_end))
+            current_index += 1
 
     # Create MESSAGE_START packet
     message_start = MessageStart(id=str(message.message_id), content="")

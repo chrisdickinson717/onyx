@@ -18,6 +18,8 @@ class PacketType(str, Enum):
     # Tool Packets
     SEARCH_TOOL_START = "search_tool_start"
     SEARCH_TOOL_END = "search_tool_end"
+    IMAGE_TOOL_START = "image_tool_start"
+    IMAGE_TOOL_END = "image_tool_end"
 
 
 class BaseObj(BaseModel):
@@ -62,8 +64,25 @@ class SearchToolEnd(BaseObj):
     results: list[LlmDoc]
 
 
+class ImageToolStart(BaseObj):
+    type: Literal[PacketType.IMAGE_TOOL_START] = PacketType.IMAGE_TOOL_START
+    prompt: str
+
+
+class ImageToolEnd(BaseObj):
+    type: Literal[PacketType.IMAGE_TOOL_END] = PacketType.IMAGE_TOOL_END
+    images: list[dict[str, str]]  # List of {id, url, prompt} objects
+
+
 ObjTypes = (
-    MessageStart | MessageDelta | MessageEnd | Stop | SearchToolStart | SearchToolEnd
+    MessageStart
+    | MessageDelta
+    | MessageEnd
+    | Stop
+    | SearchToolStart
+    | SearchToolEnd
+    | ImageToolStart
+    | ImageToolEnd
 )
 
 

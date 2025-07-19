@@ -6,13 +6,16 @@ import rehypePrism from "rehype-prism-plus";
 import rehypeKatex from "rehype-katex";
 import "prismjs/themes/prism-tomorrow.css";
 import "katex/dist/katex.min.css";
-import "../custom-code-styles.css";
+import "../../custom-code-styles.css";
 
-import { ChatPacket, PacketType } from "../../services/streamingModels";
-import { MessageRenderer, FullChatState } from "./interfaces";
-import { MemoizedAnchor, MemoizedParagraph } from "../MemoizedTextComponents";
-import { extractCodeText, preprocessLaTeX } from "../codeUtils";
-import { CodeBlock } from "../CodeBlock";
+import { ChatPacket, PacketType } from "../../../services/streamingModels";
+import { MessageRenderer, FullChatState } from "../interfaces";
+import {
+  MemoizedAnchor,
+  MemoizedParagraph,
+} from "../../MemoizedTextComponents";
+import { extractCodeText, preprocessLaTeX } from "../../codeUtils";
+import { CodeBlock } from "../../CodeBlock";
 import { transformLinkUri } from "@/lib/utils";
 
 export const MessageTextRenderer: MessageRenderer<

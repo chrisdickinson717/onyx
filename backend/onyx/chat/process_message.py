@@ -107,6 +107,8 @@ from onyx.llm.utils import litellm_exception_to_error_msg
 from onyx.natural_language_processing.utils import get_tokenizer
 from onyx.server.query_and_chat.models import ChatMessageDetail
 from onyx.server.query_and_chat.models import CreateChatMessageRequest
+from onyx.server.query_and_chat.streaming_models import ImageToolEnd
+from onyx.server.query_and_chat.streaming_models import ImageToolStart
 from onyx.server.query_and_chat.streaming_models import MessageDelta
 from onyx.server.query_and_chat.streaming_models import MessageEnd
 from onyx.server.query_and_chat.streaming_models import MessageStart
@@ -117,6 +119,7 @@ from onyx.server.query_and_chat.streaming_models import Stop
 from onyx.server.utils import get_json_line
 from onyx.tools.force import ForceUseTool
 from onyx.tools.models import SearchToolOverrideKwargs
+from onyx.tools.models import ToolCallKickoff
 from onyx.tools.models import ToolResponse
 from onyx.tools.tool import Tool
 from onyx.tools.tool_constructor import construct_tools
@@ -1030,6 +1033,15 @@ def stream_chat_message_objects(
         current_text_ind = None
         next_text_ind = 1
         for packet in answer.processed_streamed_output:
+            if isinstance(packet, ToolCallKickoff):
+                # Handle image generation tool start
+                if packet.tool_name == "run_image_generation":
+                    yield Packet(
+                        ind=next_text_ind,
+                        obj=ImageToolStart(prompt=packet.tool_args.get("prompt", "")),
+                    )
+                    next_text_ind += 1
+
             if isinstance(packet, ToolResponse):
                 if packet.id == SEARCH_RESPONSE_SUMMARY_ID:
                     yield Packet(
@@ -1049,6 +1061,38 @@ def stream_chat_message_objects(
                                 for s in cast(
                                     SearchResponseSummary, packet.response
                                 ).top_sections
+                            ]
+                        ),
+                    )
+                    next_text_ind += 1
+                elif packet.id == IMAGE_GENERATION_RESPONSE_ID:
+                    img_generation_response = cast(
+                        list[ImageGenerationResponse], packet.response
+                    )
+
+                    # Save files and get file IDs
+                    file_ids = save_files(
+                        urls=[img.url for img in img_generation_response if img.url],
+                        base64_files=[
+                            img.image_data
+                            for img in img_generation_response
+                            if img.image_data
+                        ],
+                    )
+
+                    # Emit ImageToolEnd packet with file information
+                    yield Packet(
+                        ind=next_text_ind,
+                        obj=ImageToolEnd(
+                            images=[
+                                {
+                                    "id": str(file_id),
+                                    "url": "",  # URL will be constructed by frontend
+                                    "prompt": img.revised_prompt,
+                                }
+                                for file_id, img in zip(
+                                    file_ids, img_generation_response
+                                )
                             ]
                         ),
                     )

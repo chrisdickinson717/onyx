@@ -8,13 +8,12 @@ import {
   FiClock,
 } from "react-icons/fi";
 import {
-  ChatPacket,
   PacketType,
   SearchToolPacket,
   SearchToolStart,
   SearchToolEnd,
-} from "../../services/streamingModels";
-import { MessageRenderer } from "./interfaces";
+} from "../../../services/streamingModels";
+import { MessageRenderer } from "../interfaces";
 import { SearchResultIcon } from "@/components/SearchResultIcon";
 
 export const SearchToolRenderer: MessageRenderer<SearchToolPacket, {}> = ({
@@ -47,7 +46,7 @@ export const SearchToolRenderer: MessageRenderer<SearchToolPacket, {}> = ({
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-              Searching
+              Searching{query && ` "${query}"`}
             </span>
             <div className="flex gap-0.5">
               <div className="w-0.5 h-0.5 bg-gray-500 rounded-full animate-bounce"></div>
@@ -61,11 +60,6 @@ export const SearchToolRenderer: MessageRenderer<SearchToolPacket, {}> = ({
               ></div>
             </div>
           </div>
-          {query && (
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              "{query}"
-            </p>
-          )}
         </div>
       </div>
     );
@@ -84,14 +78,9 @@ export const SearchToolRenderer: MessageRenderer<SearchToolPacket, {}> = ({
             <FiSearch className="w-3 h-3 text-gray-600 dark:text-gray-400" />
             <div>
               <h3 className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                Search Results
+                {query && ` "${query}"`} • {results.length} document
+                {results.length !== 1 ? "s" : ""} found
               </h3>
-              {query && (
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  "{query}" • {results.length} document
-                  {results.length !== 1 ? "s" : ""} found
-                </p>
-              )}
             </div>
           </div>
           <div className="flex items-center gap-1">

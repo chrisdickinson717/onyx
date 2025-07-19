@@ -14,6 +14,8 @@ export enum PacketType {
 
   SEARCH_TOOL_START = "search_tool_start",
   SEARCH_TOOL_END = "search_tool_end",
+  IMAGE_TOOL_START = "image_tool_start",
+  IMAGE_TOOL_END = "image_tool_end",
 }
 
 // LlmDoc interface matching the backend model
@@ -66,8 +68,24 @@ export interface SearchToolEnd extends BaseObj {
 
 export type SearchToolObj = SearchToolStart | SearchToolEnd;
 
+export interface ImageToolStart extends BaseObj {
+  type: PacketType.IMAGE_TOOL_START;
+  prompt: string;
+}
+
+export interface ImageToolEnd extends BaseObj {
+  type: PacketType.IMAGE_TOOL_END;
+  images: Array<{
+    id: string;
+    url: string;
+    prompt: string;
+  }>;
+}
+
+export type ImageToolObj = ImageToolStart | ImageToolEnd;
+
 // Union type for all possible streaming objects
-export type ObjTypes = ChatObj | SearchToolObj | StopObj;
+export type ObjTypes = ChatObj | SearchToolObj | ImageToolObj | StopObj;
 
 // Packet wrapper for streaming objects
 export interface Packet {
@@ -83,6 +101,11 @@ export interface ChatPacket {
 export interface SearchToolPacket {
   ind: number;
   obj: SearchToolObj;
+}
+
+export interface ImageToolPacket {
+  ind: number;
+  obj: ImageToolObj;
 }
 
 export interface StopPacket {
