@@ -1,29 +1,10 @@
-from enum import Enum
-from typing import Literal
-
 from pydantic import BaseModel
 
 from onyx.chat.models import LlmDoc
 
 
-class PacketType(str, Enum):
-    # Basic Message Packets
-    MESSAGE_START = "message_start"
-    MESSAGE_DELTA = "message_delta"
-    MESSAGE_END = "message_end"
-
-    # Control Packets
-    STOP = "stop"
-
-    # Tool Packets
-    SEARCH_TOOL_START = "search_tool_start"
-    SEARCH_TOOL_END = "search_tool_end"
-    IMAGE_TOOL_START = "image_tool_start"
-    IMAGE_TOOL_END = "image_tool_end"
-
-
 class BaseObj(BaseModel):
-    type: str
+    type: str = ""
 
 
 """Basic Message Packets"""
@@ -31,58 +12,52 @@ class BaseObj(BaseModel):
 
 class MessageStart(BaseObj):
     id: str
-    type: Literal[PacketType.MESSAGE_START] = PacketType.MESSAGE_START
+    type: str = "message_start"
     content: str
 
 
 class MessageDelta(BaseObj):
     content: str
-    type: Literal[PacketType.MESSAGE_DELTA] = PacketType.MESSAGE_DELTA
+    type: str = "message_delta"
 
 
 class MessageEnd(BaseObj):
-    type: Literal[PacketType.MESSAGE_END] = PacketType.MESSAGE_END
+    type: str = "message_end"
 
 
 """Control Packets"""
 
 
 class Stop(BaseObj):
-    type: Literal[PacketType.STOP] = PacketType.STOP
+    type: str = "stop"
 
 
 """Tool Packets"""
 
 
-class SearchToolStart(BaseObj):
-    type: Literal[PacketType.SEARCH_TOOL_START] = PacketType.SEARCH_TOOL_START
-    query: str
+class ToolStart(BaseObj):
+    type: str = "tool_start"
+
+    tool_name: str
+    tool_icon: str
+
+    # if left blank, we will use the tool name
+    tool_main_description: str | None = None
 
 
-class SearchToolEnd(BaseObj):
-    type: Literal[PacketType.SEARCH_TOOL_END] = PacketType.SEARCH_TOOL_END
-    results: list[LlmDoc]
+class ToolDelta(BaseObj):
+    type: str = "tool_delta"
+
+    documents: list[LlmDoc] | None = None
+    images: list[dict[str, str]] | None = None
 
 
-class ImageToolStart(BaseObj):
-    type: Literal[PacketType.IMAGE_TOOL_START] = PacketType.IMAGE_TOOL_START
-    prompt: str
-
-
-class ImageToolEnd(BaseObj):
-    type: Literal[PacketType.IMAGE_TOOL_END] = PacketType.IMAGE_TOOL_END
-    images: list[dict[str, str]]  # List of {id, url, prompt} objects
+class ToolEnd(BaseObj):
+    type: str = "tool_end"
 
 
 ObjTypes = (
-    MessageStart
-    | MessageDelta
-    | MessageEnd
-    | Stop
-    | SearchToolStart
-    | SearchToolEnd
-    | ImageToolStart
-    | ImageToolEnd
+    MessageStart | MessageDelta | MessageEnd | Stop | ToolStart | ToolDelta | ToolEnd
 )
 
 

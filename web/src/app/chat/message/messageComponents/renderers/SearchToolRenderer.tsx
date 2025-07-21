@@ -9,30 +9,34 @@ import {
 } from "react-icons/fi";
 import {
   PacketType,
-  SearchToolPacket,
-  SearchToolStart,
-  SearchToolEnd,
+  ToolPacket,
+  ToolStart,
+  ToolEnd,
+  ToolDelta,
 } from "../../../services/streamingModels";
 import { MessageRenderer } from "../interfaces";
 import { SearchResultIcon } from "@/components/SearchResultIcon";
 
-export const SearchToolRenderer: MessageRenderer<SearchToolPacket, {}> = ({
+export const SearchToolRenderer: MessageRenderer<ToolPacket, {}> = ({
   packets,
 }: {
-  packets: SearchToolPacket[];
+  packets: ToolPacket[];
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const searchStart = packets.find(
-    (packet) => packet.obj.type === PacketType.SEARCH_TOOL_START
-  )?.obj as SearchToolStart;
+    (packet) => packet.obj.type === PacketType.TOOL_START
+  )?.obj as ToolStart;
+  const searchDeltas = packets
+    .filter((packet) => packet.obj.type === PacketType.TOOL_DELTA)
+    .map((packet) => packet.obj as ToolDelta);
 
   const searchEnd = packets.find(
-    (packet) => packet.obj.type === PacketType.SEARCH_TOOL_END
-  )?.obj as SearchToolEnd;
+    (packet) => packet.obj.type === PacketType.TOOL_END
+  )?.obj as ToolEnd;
 
-  const query = searchStart?.query;
-  const results = searchEnd?.results || [];
+  const query = searchStart?.tool_main_description;
+  const results = searchDeltas.flatMap((delta) => delta?.documents || []);
   const isSearching = searchStart && !searchEnd;
   const isComplete = searchStart && searchEnd;
 

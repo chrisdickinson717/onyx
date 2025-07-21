@@ -9,8 +9,7 @@ import {
   ChatPacket,
   Packet,
   PacketType,
-  SearchToolPacket,
-  ImageToolPacket,
+  ToolPacket,
 } from "../../services/streamingModels";
 import { FullChatState } from "./interfaces";
 import { MessageTextRenderer } from "./renderers/MessageTextRenderer";
@@ -30,17 +29,17 @@ function isChatPacket(packet: Packet): packet is ChatPacket {
   );
 }
 
-function isSearchToolPacket(packet: Packet): packet is SearchToolPacket {
+function isSearchToolPacket(packet: Packet): packet is ToolPacket {
   return (
-    packet.obj.type === PacketType.SEARCH_TOOL_START ||
-    packet.obj.type === PacketType.SEARCH_TOOL_END
+    packet.obj.type === PacketType.TOOL_START &&
+    packet.obj.tool_name === "search"
   );
 }
 
-function isImageToolPacket(packet: Packet): packet is ImageToolPacket {
+function isImageToolPacket(packet: Packet): packet is ToolPacket {
   return (
-    packet.obj.type === PacketType.IMAGE_TOOL_START ||
-    packet.obj.type === PacketType.IMAGE_TOOL_END
+    packet.obj.type === PacketType.TOOL_START &&
+    packet.obj.tool_name === "image_generation"
   );
 }
 
@@ -52,24 +51,30 @@ export function renderMessageComponent(
     return null;
   }
 
-  if (isChatPacket(groupedPackets.packets[0])) {
+  console.log("groupedPackets", groupedPackets);
+
+  if (groupedPackets.packets.some((packet) => isChatPacket(packet))) {
     return (
       <MessageTextRenderer
         packets={groupedPackets.packets as ChatPacket[]}
         state={fullChatState}
       />
     );
-  } else if (isSearchToolPacket(groupedPackets.packets[0])) {
+  } else if (
+    groupedPackets.packets.some((packet) => isSearchToolPacket(packet))
+  ) {
     return (
       <SearchToolRenderer
-        packets={groupedPackets.packets as SearchToolPacket[]}
+        packets={groupedPackets.packets as ToolPacket[]}
         state={fullChatState}
       />
     );
-  } else if (isImageToolPacket(groupedPackets.packets[0])) {
+  } else if (
+    groupedPackets.packets.some((packet) => isImageToolPacket(packet))
+  ) {
     return (
       <ImageToolRenderer
-        packets={groupedPackets.packets as ImageToolPacket[]}
+        packets={groupedPackets.packets as ToolPacket[]}
         state={fullChatState}
       />
     );

@@ -1,15 +1,14 @@
 from onyx.chat.models import LlmDoc
 from onyx.configs.constants import MessageType
 from onyx.server.query_and_chat.models import ChatMessageDetail
-from onyx.server.query_and_chat.streaming_models import ImageToolEnd
-from onyx.server.query_and_chat.streaming_models import ImageToolStart
 from onyx.server.query_and_chat.streaming_models import MessageDelta
 from onyx.server.query_and_chat.streaming_models import MessageEnd
 from onyx.server.query_and_chat.streaming_models import MessageStart
 from onyx.server.query_and_chat.streaming_models import Packet
-from onyx.server.query_and_chat.streaming_models import SearchToolEnd
-from onyx.server.query_and_chat.streaming_models import SearchToolStart
 from onyx.server.query_and_chat.streaming_models import Stop
+from onyx.server.query_and_chat.streaming_models import ToolDelta
+from onyx.server.query_and_chat.streaming_models import ToolEnd
+from onyx.server.query_and_chat.streaming_models import ToolStart
 
 
 def create_simplified_packets_for_message(
@@ -51,10 +50,20 @@ def create_simplified_packets_for_message(
             )
             llm_docs.append(llm_doc)
 
-        search_tool_start = SearchToolStart(query=message.rephrased_query or "")
+        # Start search tool
+        search_tool_start = ToolStart(
+            tool_name="search",
+            tool_icon="search",
+            tool_main_description=f"Searching for: {message.rephrased_query or ''}",
+        )
         packets.append(Packet(ind=current_index, obj=search_tool_start))
 
-        search_tool_end = SearchToolEnd(results=llm_docs)
+        # Send search results via tool delta
+        search_tool_delta = ToolDelta(documents=llm_docs)
+        packets.append(Packet(ind=current_index, obj=search_tool_delta))
+
+        # End search tool
+        search_tool_end = ToolEnd()
         packets.append(Packet(ind=current_index, obj=search_tool_end))
         current_index += 1
 
@@ -64,9 +73,15 @@ def create_simplified_packets_for_message(
 
         image_files = [f for f in message.files if f["type"] == ChatFileType.IMAGE]
         if image_files:
-            image_tool_start = ImageToolStart(prompt="Generated images")
+            # Start image tool
+            image_tool_start = ToolStart(
+                tool_name="image_generation",
+                tool_icon="image",
+                tool_main_description="Generated images",
+            )
             packets.append(Packet(ind=current_index, obj=image_tool_start))
 
+            # Send images via tool delta
             images = []
             for file in image_files:
                 images.append(
@@ -78,7 +93,11 @@ def create_simplified_packets_for_message(
                     }
                 )
 
-            image_tool_end = ImageToolEnd(images=images)
+            image_tool_delta = ToolDelta(images=images)
+            packets.append(Packet(ind=current_index, obj=image_tool_delta))
+
+            # End image tool
+            image_tool_end = ToolEnd()
             packets.append(Packet(ind=current_index, obj=image_tool_end))
             current_index += 1
 
