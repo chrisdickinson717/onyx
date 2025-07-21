@@ -131,7 +131,7 @@ def _convert_driveitem_to_document_with_permissions(
         raise ValueError("DriveItem ID is required")
     if include_permissions and ctx is None:
         raise ValueError("ClientContext is required for permissions")
-
+    logger.info(f"Getting drive item content for drive item: {driveitem.name}")
     content = driveitem.get_content().execute_query().value
 
     if content is None:
@@ -154,7 +154,7 @@ def _convert_driveitem_to_document_with_permissions(
     if include_permissions and ctx is not None:
         try:
             external_access = get_sharepoint_external_access(
-                driveitem, drive_name, ctx, graph_client
+                driveitem, drive_name, ctx, graph_client, True
             )
         except Exception as e:
             logger.warning(
