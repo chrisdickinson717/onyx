@@ -5,18 +5,14 @@ import {
   ChatFileType,
   ChatSession,
   ChatSessionSharedStatus,
-  FileDescriptor,
   Message,
 } from "../interfaces";
 
 import Cookies from "js-cookie";
 import { HistorySidebar } from "@/components/sidebar/HistorySidebar";
-import { Persona } from "../../admin/assistants/interfaces";
 import { HealthCheckBanner } from "@/components/health/healthcheck";
 import {
-  getCitedDocumentsFromMessage,
   getHumanAndAIMessageFromMessageNumber,
-  handleChatFeedback,
   personaIncludesRetrieval,
   useScrollonStream,
 } from "../services/lib";
@@ -69,7 +65,6 @@ import {
 
 import { getSourceMetadata } from "@/lib/sources";
 import { UserSettingsModal } from "./modal/UserSettingsModal";
-import { AgenticMessage } from "../message/AgenticMessage";
 import AssistantModal from "../../assistants/mine/AssistantModal";
 import { useSidebarShortcut } from "@/lib/browserUtilities";
 import { FilePickerModal } from "../my-documents/components/FilePicker";
@@ -82,7 +77,6 @@ import { ErrorBanner } from "../message/Resubmit";
 import MinimalMarkdown from "@/components/chat/MinimalMarkdown";
 import { useScreenSize } from "@/hooks/useScreenSize";
 import { DocumentResults } from "./documentSidebar/DocumentResults";
-import { getLatestMessageChain } from "../services/messageTree";
 import { useChatController } from "../hooks/useChatController";
 import { useAssistantController } from "../hooks/useAssistantController";
 import { useChatSessionController } from "../hooks/useChatSessionController";
@@ -109,11 +103,6 @@ import {
   useHasSentLocalUserMessage,
 } from "../stores/useChatSessionStore";
 import { SimpleMessage } from "../message/messageComponents/SimpleMessage";
-
-export enum UploadIntent {
-  ATTACH_TO_MESSAGE, // For files uploaded via ChatInputBar (paste, drag/drop)
-  ADD_TO_DOCUMENTS, // For files uploaded via FilePickerModal or similar (just add to repo)
-}
 
 export function ChatPage({
   toggle,

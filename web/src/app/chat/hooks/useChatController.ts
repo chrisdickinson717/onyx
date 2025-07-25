@@ -85,7 +85,6 @@ import {
 } from "../my-documents/DocumentsContext";
 import { useChatContext } from "@/components/context/ChatContext";
 import Prism from "prismjs";
-import { UploadIntent } from "../components/ChatPage";
 import {
   useChatSessionStore,
   useCurrentMessageTree,

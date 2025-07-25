@@ -10,7 +10,6 @@ import FixedLogo from "../../components/logo/FixedLogo";
 import { SettingsContext } from "@/components/settings/SettingsProvider";
 import { useChatContext } from "@/components/context/ChatContext";
 import { HistorySidebar } from "@/components/sidebar/HistorySidebar";
-import { useAssistants } from "@/components/context/AssistantsContext";
 import AssistantModal from "./mine/AssistantModal";
 import { useSidebarShortcut } from "@/lib/browserUtilities";
 import { UserSettingsModal } from "@/app/chat/components/modal/UserSettingsModal";
@@ -43,7 +42,6 @@ export default function SidebarWrapper<T extends object>({
 
   const sidebarElementRef = useRef<HTMLDivElement>(null);
   const { folders, openedFolders, chatSessions } = useChatContext();
-  const { assistants } = useAssistantsContext();
   const explicitlyUntoggle = () => {
     setShowDocSidebar(false);
 
