@@ -1,10 +1,10 @@
 "use client";
 
+import { v4 as uuidv4 } from "uuid";
+
 import {
   buildChatUrl,
   nameChatSession,
-  processRawChatHistory,
-  patchMessageToBeLatest,
   updateLlmOverrideForChatSession,
 } from "../services/lib";
 
@@ -252,7 +252,6 @@ export function useChatController({
     messages,
     completeMessageTreeOverride,
     chatSessionId,
-    oldIds,
     makeLatestChildMessage = false,
   }: {
     messages: Message[];
@@ -269,12 +268,6 @@ export function useChatController({
         sessions.get(chatSessionId)?.messageTree) ||
       currentMessageTree ||
       new Map<number, Message>();
-
-    if (oldIds) {
-      oldIds.forEach((id) => {
-        removeMessage(currentMessageTreeToUse, id);
-      });
-    }
 
     const newCompleteMessageTree = upsertMessages(
       currentMessageTreeToUse,
@@ -321,7 +314,6 @@ export function useChatController({
     queryOverride,
     forceSearch,
     isSeededChat,
-    alternativeAssistantOverride = null,
     modelOverride,
     regenerationRequest,
     overrideFileDescriptors,
@@ -339,7 +331,6 @@ export function useChatController({
     queryOverride?: string;
     forceSearch?: boolean;
     isSeededChat?: boolean;
-    alternativeAssistantOverride?: Persona | null;
     modelOverride?: LlmDescriptor;
     regenerationRequest?: RegenerationRequest | null;
     overrideFileDescriptors?: FileDescriptor[];
@@ -424,8 +415,6 @@ export function useChatController({
       return;
     }
 
-    // setAlternativeGeneratingAssistant(alternativeAssistantOverride);
-
     clientScrollToBottom();
 
     let currChatSessionId: string;
@@ -468,9 +457,9 @@ export function useChatController({
     const messageToResend = currentHistory.find(
       (message) => message.messageId === messageIdToResend
     );
-    if (messageIdToResend) {
+    if (messageIdToResend && regenerationRequest) {
       updateRegenerationState(
-        { regenerating: true, finalMessageIndex: messageIdToResend },
+        { regenerating: true, finalMessageIndex: messageIdToResend + 1 },
         frozenSessionId
       );
     }
@@ -493,7 +482,9 @@ export function useChatController({
       updateChatStateAction(frozenSessionId, "input");
       return;
     }
-    let currMessage = messageToResend ? messageToResend.message : message;
+    let currMessage = regenerationRequest
+      ? messageToResend?.message || message
+      : message;
 
     updateChatStateAction(frozenSessionId, "loading");
 
@@ -512,7 +503,6 @@ export function useChatController({
         : null);
 
     resetInputBar();
-    let messageUpdates: Message[] | null = null;
 
     let answer = "";
     let second_level_answer = "";
@@ -536,17 +526,13 @@ export function useChatController({
     let toolCall: ToolCallMetadata | null = null;
     let isImprovement: boolean | undefined = undefined;
     let isStreamingQuestions = true;
-    let includeAgentic = false;
-    let secondLevelMessageId: number | null = null;
     let isAgentic: boolean = false;
     let files: FileDescriptor[] = [];
     let packets: Packet[] = [];
 
-    let initialFetchDetails: null | {
-      user_message_id: number;
-      assistant_message_id: number;
-      frozenMessageMap: Map<number, Message>;
-    } = null;
+    let newUserMessageId: number | null = null;
+    let newAssistantMessageId: number | null = null;
+
     try {
       const mapKeys = Array.from(currentMessageTreeLocal.keys());
       const lastSuccessfulMessageId = getLastSuccessfulMessageId(
@@ -562,6 +548,7 @@ export function useChatController({
         fileDescriptors: overrideFileDescriptors || currentMessageFiles,
         parentMessageId:
           regenerationRequest?.parentMessage.messageId ||
+          messageToResendParent?.messageId ||
           lastSuccessfulMessageId,
         chatSessionId: currChatSessionId,
         filters: buildFilters(
@@ -603,7 +590,6 @@ export function useChatController({
         return new Promise((resolve) => setTimeout(resolve, ms));
       };
 
-      await delay(50);
       while (!stack.isComplete || !stack.isEmpty()) {
         if (stack.isEmpty()) {
           await delay(0.5);
@@ -616,360 +602,270 @@ export function useChatController({
           }
           console.debug("Packet:", JSON.stringify(packet));
 
-          if (!initialFetchDetails) {
-            if (!Object.hasOwn(packet, "user_message_id")) {
-              console.error(
-                "First packet should contain message response info "
-              );
-              if (Object.hasOwn(packet, "error")) {
-                const error = (packet as StreamingError).error;
-                setLoadingError(frozenSessionId, error);
-                updateChatStateAction(frozenSessionId, "input");
-                return;
-              }
-              continue;
+          // We've processed initial packets and are starting to stream content.
+          // Transition from 'loading' to 'streaming'.
+          updateChatStateAction(frozenSessionId, "streaming");
+
+          if ((packet as MessageResponseIDInfo).user_message_id) {
+            newUserMessageId = (packet as MessageResponseIDInfo)
+              .user_message_id;
+          }
+
+          if ((packet as MessageResponseIDInfo).reserved_assistant_message_id) {
+            newAssistantMessageId = (packet as MessageResponseIDInfo)
+              .reserved_assistant_message_id;
+          }
+
+          if (Object.hasOwn(packet, "level")) {
+            if ((packet as any).level === 1) {
+              second_level_generating = true;
             }
+          }
+          if (Object.hasOwn(packet, "user_files")) {
+            const userFiles = (packet as UserKnowledgeFilePacket).user_files;
+            // Ensure files are unique by id
+            const newUserFiles = userFiles.filter(
+              (newFile) =>
+                !files.some((existingFile) => existingFile.id === newFile.id)
+            );
+            files = files.concat(newUserFiles);
+          }
+          if (Object.hasOwn(packet, "is_agentic")) {
+            isAgentic = (packet as any).is_agentic;
+          }
 
-            const messageResponseIDInfo = packet as MessageResponseIDInfo;
+          if (Object.hasOwn(packet, "refined_answer_improvement")) {
+            isImprovement = (packet as RefinedAnswerImprovement)
+              .refined_answer_improvement;
+          }
 
-            const user_message_id = messageResponseIDInfo.user_message_id!;
-            const assistant_message_id =
-              messageResponseIDInfo.reserved_assistant_message_id;
-
-            // we will use tempMessages until the regenerated message is complete
-            messageUpdates = [
-              {
-                messageId: regenerationRequest
-                  ? regenerationRequest?.parentMessage?.messageId!
-                  : user_message_id,
-                message: currMessage,
-                type: "user",
-                files: files,
-                toolCall: null,
-                parentMessageId: parentMessage?.messageId || SYSTEM_MESSAGE_ID,
-                packets: [],
-              },
-            ];
-
-            if (parentMessage && !regenerationRequest) {
-              messageUpdates.push({
-                ...parentMessage,
-                childrenMessageIds: (
-                  parentMessage.childrenMessageIds || []
-                ).concat([user_message_id]),
-                latestChildMessageId: user_message_id,
-              });
+          if (Object.hasOwn(packet, "stream_type")) {
+            if ((packet as any).stream_type == "main_answer") {
+              is_generating = false;
+              second_level_generating = true;
             }
+          }
 
-            const { messageTree: currentFrozenMessageTree } =
-              upsertToCompleteMessageTree({
-                messages: messageUpdates,
-                chatSessionId: currChatSessionId,
-                completeMessageTreeOverride: currentMessageTreeLocal,
-              });
-            currentMessageTreeLocal = currentFrozenMessageTree;
+          // // Continuously refine the sub_questions based on the packets that we receive
+          if (
+            Object.hasOwn(packet, "stop_reason") &&
+            Object.hasOwn(packet, "level_question_num")
+          ) {
+            if ((packet as StreamStopInfo).stream_type == "main_answer") {
+              updateChatStateAction(frozenSessionId, "streaming");
+            }
+            if (
+              (packet as StreamStopInfo).stream_type == "sub_questions" &&
+              (packet as StreamStopInfo).level_question_num == undefined
+            ) {
+              isStreamingQuestions = false;
+            }
+            sub_questions = constructSubQuestions(
+              sub_questions,
+              packet as StreamStopInfo
+            );
+          } else if (Object.hasOwn(packet, "sub_question")) {
+            updateChatStateAction(frozenSessionId, "toolBuilding");
+            isAgentic = true;
+            is_generating = true;
+            sub_questions = constructSubQuestions(
+              sub_questions,
+              packet as SubQuestionPiece
+            );
+            setAgenticGenerating(frozenSessionId, true);
+          } else if (Object.hasOwn(packet, "sub_query")) {
+            sub_questions = constructSubQuestions(
+              sub_questions,
+              packet as SubQueryPiece
+            );
+          } else if (
+            Object.hasOwn(packet, "answer_piece") &&
+            Object.hasOwn(packet, "answer_type") &&
+            (packet as AgentAnswerPiece).answer_type === "agent_sub_answer"
+          ) {
+            sub_questions = constructSubQuestions(
+              sub_questions,
+              packet as AgentAnswerPiece
+            );
+          } else if (Object.hasOwn(packet, "answer_piece")) {
+            // Mark every sub_question's is_generating as false
+            sub_questions = sub_questions.map((subQ) => ({
+              ...subQ,
+              is_generating: false,
+            }));
 
-            initialFetchDetails = {
-              frozenMessageMap: currentMessageTreeLocal,
-              assistant_message_id,
-              user_message_id,
+            if (Object.hasOwn(packet, "level") && (packet as any).level === 1) {
+              second_level_answer += (packet as AnswerPiecePacket).answer_piece;
+            } else {
+              answer += (packet as AnswerPiecePacket).answer_piece;
+            }
+          } else if (
+            Object.hasOwn(packet, "top_documents") &&
+            Object.hasOwn(packet, "level_question_num") &&
+            (packet as DocumentsResponse).level_question_num != undefined
+          ) {
+            const documentsResponse = packet as DocumentsResponse;
+            sub_questions = constructSubQuestions(
+              sub_questions,
+              documentsResponse
+            );
+
+            if (
+              documentsResponse.level_question_num === 0 &&
+              documentsResponse.level == 0
+            ) {
+              documents = (packet as DocumentsResponse).top_documents;
+            } else if (
+              documentsResponse.level_question_num === 0 &&
+              documentsResponse.level == 1
+            ) {
+              agenticDocs = (packet as DocumentsResponse).top_documents;
+            }
+          } else if (Object.hasOwn(packet, "top_documents")) {
+            documents = (packet as DocumentInfoPacket).top_documents;
+            retrievalType = RetrievalType.Search;
+
+            if (documents && documents.length > 0) {
+              // point to the latest message (we don't know the messageId yet, which is why
+              // we have to use -1)
+              setSelectedMessageForDocDisplay(newAssistantMessageId);
+            }
+          } else if (Object.hasOwn(packet, "tool_name")) {
+            // Will only ever be one tool call per message
+            toolCall = {
+              tool_name: (packet as ToolCallMetadata).tool_name,
+              tool_args: (packet as ToolCallMetadata).tool_args,
+              tool_result: (packet as ToolCallMetadata).tool_result,
             };
 
-            resetRegenerationState();
-          } else {
-            const { user_message_id, frozenMessageMap } = initialFetchDetails;
-            if (Object.hasOwn(packet, "agentic_message_ids")) {
-              const agenticMessageIds = (packet as AgenticMessageResponseIDInfo)
-                .agentic_message_ids;
-              const level1MessageId = agenticMessageIds.find(
-                (item) => item.level === 1
-              )?.message_id;
-              if (level1MessageId) {
-                secondLevelMessageId = level1MessageId;
-                includeAgentic = true;
-              }
-            }
-
-            // We've processed initial packets and are starting to stream content.
-            // Transition from 'loading' to 'streaming'.
-            updateChatStateAction(frozenSessionId, "streaming");
-
-            if (Object.hasOwn(packet, "level")) {
-              if ((packet as any).level === 1) {
-                second_level_generating = true;
-              }
-            }
-            if (Object.hasOwn(packet, "user_files")) {
-              const userFiles = (packet as UserKnowledgeFilePacket).user_files;
-              // Ensure files are unique by id
-              const newUserFiles = userFiles.filter(
-                (newFile) =>
-                  !files.some((existingFile) => existingFile.id === newFile.id)
-              );
-              files = files.concat(newUserFiles);
-            }
-            if (Object.hasOwn(packet, "is_agentic")) {
-              isAgentic = (packet as any).is_agentic;
-            }
-
-            if (Object.hasOwn(packet, "refined_answer_improvement")) {
-              isImprovement = (packet as RefinedAnswerImprovement)
-                .refined_answer_improvement;
-            }
-
-            if (Object.hasOwn(packet, "stream_type")) {
-              if ((packet as any).stream_type == "main_answer") {
-                is_generating = false;
-                second_level_generating = true;
-              }
-            }
-
-            // // Continuously refine the sub_questions based on the packets that we receive
-            if (
-              Object.hasOwn(packet, "stop_reason") &&
-              Object.hasOwn(packet, "level_question_num")
-            ) {
-              if ((packet as StreamStopInfo).stream_type == "main_answer") {
+            if (!toolCall.tool_name.includes("agent")) {
+              if (!toolCall.tool_result || toolCall.tool_result == undefined) {
+                updateChatStateAction(frozenSessionId, "toolBuilding");
+              } else {
                 updateChatStateAction(frozenSessionId, "streaming");
               }
-              if (
-                (packet as StreamStopInfo).stream_type == "sub_questions" &&
-                (packet as StreamStopInfo).level_question_num == undefined
-              ) {
-                isStreamingQuestions = false;
-              }
-              sub_questions = constructSubQuestions(
-                sub_questions,
-                packet as StreamStopInfo
-              );
-            } else if (Object.hasOwn(packet, "sub_question")) {
-              updateChatStateAction(frozenSessionId, "toolBuilding");
-              isAgentic = true;
-              is_generating = true;
-              sub_questions = constructSubQuestions(
-                sub_questions,
-                packet as SubQuestionPiece
-              );
-              setAgenticGenerating(frozenSessionId, true);
-            } else if (Object.hasOwn(packet, "sub_query")) {
-              sub_questions = constructSubQuestions(
-                sub_questions,
-                packet as SubQueryPiece
-              );
-            } else if (
-              Object.hasOwn(packet, "answer_piece") &&
-              Object.hasOwn(packet, "answer_type") &&
-              (packet as AgentAnswerPiece).answer_type === "agent_sub_answer"
-            ) {
-              sub_questions = constructSubQuestions(
-                sub_questions,
-                packet as AgentAnswerPiece
-              );
-            } else if (Object.hasOwn(packet, "answer_piece")) {
-              // Mark every sub_question's is_generating as false
-              sub_questions = sub_questions.map((subQ) => ({
-                ...subQ,
-                is_generating: false,
-              }));
 
-              if (
-                Object.hasOwn(packet, "level") &&
-                (packet as any).level === 1
-              ) {
-                second_level_answer += (packet as AnswerPiecePacket)
-                  .answer_piece;
-              } else {
-                answer += (packet as AnswerPiecePacket).answer_piece;
+              // This will be consolidated in upcoming tool calls udpate,
+              // but for now, we need to set query as early as possible
+              if (toolCall.tool_name == SEARCH_TOOL_NAME) {
+                query = toolCall.tool_args["query"];
               }
-            } else if (
-              Object.hasOwn(packet, "top_documents") &&
-              Object.hasOwn(packet, "level_question_num") &&
-              (packet as DocumentsResponse).level_question_num != undefined
-            ) {
-              const documentsResponse = packet as DocumentsResponse;
-              sub_questions = constructSubQuestions(
-                sub_questions,
-                documentsResponse
-              );
-
-              if (
-                documentsResponse.level_question_num === 0 &&
-                documentsResponse.level == 0
-              ) {
-                documents = (packet as DocumentsResponse).top_documents;
-              } else if (
-                documentsResponse.level_question_num === 0 &&
-                documentsResponse.level == 1
-              ) {
-                agenticDocs = (packet as DocumentsResponse).top_documents;
-              }
-            } else if (Object.hasOwn(packet, "top_documents")) {
-              documents = (packet as DocumentInfoPacket).top_documents;
-              retrievalType = RetrievalType.Search;
-
-              if (documents && documents.length > 0) {
-                // point to the latest message (we don't know the messageId yet, which is why
-                // we have to use -1)
-                setSelectedMessageForDocDisplay(user_message_id);
-              }
-            } else if (Object.hasOwn(packet, "tool_name")) {
-              // Will only ever be one tool call per message
-              toolCall = {
-                tool_name: (packet as ToolCallMetadata).tool_name,
-                tool_args: (packet as ToolCallMetadata).tool_args,
-                tool_result: (packet as ToolCallMetadata).tool_result,
-              };
-
-              if (!toolCall.tool_name.includes("agent")) {
-                if (
-                  !toolCall.tool_result ||
-                  toolCall.tool_result == undefined
-                ) {
-                  updateChatStateAction(frozenSessionId, "toolBuilding");
-                } else {
-                  updateChatStateAction(frozenSessionId, "streaming");
-                }
-
-                // This will be consolidated in upcoming tool calls udpate,
-                // but for now, we need to set query as early as possible
-                if (toolCall.tool_name == SEARCH_TOOL_NAME) {
-                  query = toolCall.tool_args["query"];
-                }
-              } else {
-                toolCall = null;
-              }
-            } else if (Object.hasOwn(packet, "file_ids")) {
-              aiMessageImages = (packet as FileChatDisplay).file_ids.map(
-                (fileId) => {
-                  return {
-                    id: fileId,
-                    type: ChatFileType.IMAGE,
-                  };
-                }
-              );
-            } else if (
-              Object.hasOwn(packet, "error") &&
-              (packet as any).error != null
-            ) {
-              if (
-                sub_questions.length > 0 &&
-                sub_questions
-                  .filter((q) => q.level === 0)
-                  .every((q) => q.is_stopped === true)
-              ) {
-                setUncaughtError(
-                  frozenSessionId,
-                  (packet as StreamingError).error
-                );
-                updateChatStateAction(frozenSessionId, "input");
-                setAgenticGenerating(frozenSessionId, false);
-                // setAlternativeGeneratingAssistant(null);
-                updateSubmittedMessage(getCurrentSessionId(), "");
-
-                throw new Error((packet as StreamingError).error);
-              } else {
-                error = (packet as StreamingError).error;
-                stackTrace = (packet as StreamingError).stack_trace;
-              }
-            } else if (Object.hasOwn(packet, "message_id")) {
-              finalMessage = packet as BackendMessage;
-            } else if (Object.hasOwn(packet, "stop_reason")) {
-              const stop_reason = (packet as StreamStopInfo).stop_reason;
-              if (stop_reason === StreamStopReason.CONTEXT_LENGTH) {
-                updateCanContinue(true, frozenSessionId);
-              }
-            } else if (Object.hasOwn(packet, "obj")) {
-              console.log("Object packet:", JSON.stringify(packet));
-              packets.push(packet as Packet);
             } else {
-              console.log("Unknown packet:", JSON.stringify(packet));
+              toolCall = null;
             }
+          } else if (Object.hasOwn(packet, "file_ids")) {
+            aiMessageImages = (packet as FileChatDisplay).file_ids.map(
+              (fileId) => {
+                return {
+                  id: fileId,
+                  type: ChatFileType.IMAGE,
+                };
+              }
+            );
+          } else if (
+            Object.hasOwn(packet, "error") &&
+            (packet as any).error != null
+          ) {
+            if (
+              sub_questions.length > 0 &&
+              sub_questions
+                .filter((q) => q.level === 0)
+                .every((q) => q.is_stopped === true)
+            ) {
+              setUncaughtError(
+                frozenSessionId,
+                (packet as StreamingError).error
+              );
+              updateChatStateAction(frozenSessionId, "input");
+              setAgenticGenerating(frozenSessionId, false);
+              // setAlternativeGeneratingAssistant(null);
+              updateSubmittedMessage(getCurrentSessionId(), "");
 
-            // on initial message send, we insert a dummy system message
-            // set this as the parent here if no parent is set
-            parentMessage =
-              parentMessage || frozenMessageMap?.get(SYSTEM_MESSAGE_ID)!;
-
-            const updateFn = (messages: Message[]) => {
-              const oldIds =
-                regenerationRequest && initialFetchDetails?.assistant_message_id
-                  ? [regenerationRequest.messageId]
-                  : null;
-
-              const newMessageDetails = upsertToCompleteMessageTree({
-                messages: messages,
-                oldIds: oldIds,
-                // Pass the latest map state
-                completeMessageTreeOverride: currentMessageTreeLocal,
-                chatSessionId: frozenSessionId!,
-              });
-              currentMessageTreeLocal = newMessageDetails.messageTree;
-              return newMessageDetails;
-            };
-
-            const systemMessageId = Math.min(...mapKeys);
-            updateFn([
-              {
-                messageId: regenerationRequest
-                  ? regenerationRequest?.parentMessage?.messageId!
-                  : initialFetchDetails.user_message_id!,
-                message: currMessage,
-                type: "user",
-                files: files,
-                toolCall: null,
-                // in the frontend, every message should have a parent ID
-                parentMessageId: lastSuccessfulMessageId ?? systemMessageId,
-                childrenMessageIds: [
-                  ...(regenerationRequest?.parentMessage?.childrenMessageIds ||
-                    []),
-                  initialFetchDetails.assistant_message_id!,
-                ],
-                latestChildMessageId: initialFetchDetails.assistant_message_id,
-                packets: [],
-              },
-              {
-                isStreamingQuestions: isStreamingQuestions,
-                is_generating: is_generating,
-                isImprovement: isImprovement,
-                messageId: initialFetchDetails.assistant_message_id!,
-                message: error || answer,
-                second_level_message: second_level_answer,
-                type: error ? "error" : "assistant",
-                retrievalType,
-                query: finalMessage?.rephrased_query || query,
-                documents: documents,
-                citations: finalMessage?.citations || {},
-                files: finalMessage?.files || aiMessageImages || [],
-                toolCall: finalMessage?.tool_call || toolCall,
-                parentMessageId: regenerationRequest
-                  ? regenerationRequest?.parentMessage?.messageId!
-                  : initialFetchDetails.user_message_id,
-                // alternateAssistantID: alternativeAssistant?.id,
-                stackTrace: stackTrace,
-                overridden_model: finalMessage?.overridden_model,
-                stopReason: stopReason,
-                sub_questions: sub_questions,
-                second_level_generating: second_level_generating,
-                agentic_docs: agenticDocs,
-                is_agentic: isAgentic,
-                packets: packets,
-              },
-              ...(includeAgentic
-                ? [
-                    {
-                      messageId: secondLevelMessageId!,
-                      message: second_level_answer,
-                      type: "assistant" as const,
-                      files: [],
-                      toolCall: null,
-                      parentMessageId:
-                        initialFetchDetails.assistant_message_id!,
-                      packets: [],
-                    },
-                  ]
-                : []),
-            ]);
+              throw new Error((packet as StreamingError).error);
+            } else {
+              error = (packet as StreamingError).error;
+              stackTrace = (packet as StreamingError).stack_trace;
+            }
+          } else if (Object.hasOwn(packet, "message_id")) {
+            finalMessage = packet as BackendMessage;
+          } else if (Object.hasOwn(packet, "stop_reason")) {
+            const stop_reason = (packet as StreamStopInfo).stop_reason;
+            if (stop_reason === StreamStopReason.CONTEXT_LENGTH) {
+              updateCanContinue(true, frozenSessionId);
+            }
+          } else if (Object.hasOwn(packet, "obj")) {
+            console.log("Object packet:", JSON.stringify(packet));
+            packets.push(packet as Packet);
+          } else {
+            console.log("Unknown packet:", JSON.stringify(packet));
           }
+
+          // on initial message send, we insert a dummy system message
+          // set this as the parent here if no parent is set
+          parentMessage =
+            parentMessage || currentMessageTreeLocal?.get(SYSTEM_MESSAGE_ID)!;
+
+          const updateFn = (messages: Message[]) => {
+            const newMessageDetails = upsertToCompleteMessageTree({
+              messages: messages,
+              // Pass the latest map state
+              completeMessageTreeOverride: currentMessageTreeLocal,
+              chatSessionId: frozenSessionId!,
+            });
+            currentMessageTreeLocal = newMessageDetails.messageTree;
+            return newMessageDetails;
+          };
+
+          const systemMessageId = Math.min(...mapKeys);
+          const messagesToAdd: Message[] = [];
+
+          // Only add a new user message when this is not a regeneration request.
+          if (!regenerationRequest) {
+            messagesToAdd.push({
+              messageId: newUserMessageId!,
+              message: currMessage,
+              type: "user",
+              files: files,
+              toolCall: null,
+              // in the frontend, every message should have a parent ID
+              parentMessageId:
+                messageToResendParent?.messageId ||
+                lastSuccessfulMessageId ||
+                systemMessageId,
+              childrenMessageIds: [newAssistantMessageId!],
+              latestChildMessageId: newAssistantMessageId,
+              packets: [],
+            });
+          }
+
+          // Assistant message (always added)
+          messagesToAdd.push({
+            isStreamingQuestions: isStreamingQuestions,
+            is_generating: is_generating,
+            isImprovement: isImprovement,
+            messageId: newAssistantMessageId!,
+            message: error || answer,
+            second_level_message: second_level_answer,
+            type: error ? "error" : "assistant",
+            retrievalType,
+            query: finalMessage?.rephrased_query || query,
+            documents: documents,
+            citations: finalMessage?.citations || {},
+            files: finalMessage?.files || aiMessageImages || [],
+            toolCall: finalMessage?.tool_call || toolCall,
+            parentMessageId:
+              regenerationRequest?.parentMessage.messageId ?? newUserMessageId!,
+            stackTrace: stackTrace,
+            overridden_model: finalMessage?.overridden_model,
+            stopReason: stopReason,
+            sub_questions: sub_questions,
+            second_level_generating: second_level_generating,
+            agentic_docs: agenticDocs,
+            is_agentic: isAgentic,
+            packets: packets,
+          });
+
+          updateFn(messagesToAdd);
         }
       }
     } catch (e: any) {
@@ -978,8 +874,7 @@ export function useChatController({
       const newMessageDetails = upsertToCompleteMessageTree({
         messages: [
           {
-            messageId:
-              initialFetchDetails?.user_message_id || TEMP_USER_MESSAGE_ID,
+            messageId: TEMP_USER_MESSAGE_ID,
             message: currMessage,
             type: "user",
             files: currentMessageFiles,
@@ -988,15 +883,12 @@ export function useChatController({
             packets: [],
           },
           {
-            messageId:
-              initialFetchDetails?.assistant_message_id ||
-              TEMP_ASSISTANT_MESSAGE_ID,
+            messageId: TEMP_ASSISTANT_MESSAGE_ID,
             message: errorMsg,
             type: "error",
             files: aiMessageImages || [],
             toolCall: null,
-            parentMessageId:
-              initialFetchDetails?.user_message_id || TEMP_USER_MESSAGE_ID,
+            parentMessageId: TEMP_USER_MESSAGE_ID,
             packets: [],
           },
         ],

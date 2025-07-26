@@ -494,10 +494,27 @@ export const AIMessage = ({
     otherMessagesCanSwitchTo &&
     otherMessagesCanSwitchTo.length > 1;
 
-  let otherMessage: number | undefined = undefined;
-  if (currentMessageInd && otherMessagesCanSwitchTo) {
-    otherMessage = otherMessagesCanSwitchTo[currentMessageInd - 1];
-  }
+  const getPreviousMessage = () => {
+    if (
+      currentMessageInd !== undefined &&
+      currentMessageInd > 0 &&
+      otherMessagesCanSwitchTo
+    ) {
+      return otherMessagesCanSwitchTo[currentMessageInd - 1];
+    }
+    return undefined;
+  };
+
+  const getNextMessage = () => {
+    if (
+      currentMessageInd !== undefined &&
+      currentMessageInd < (otherMessagesCanSwitchTo?.length || 0) - 1 &&
+      otherMessagesCanSwitchTo
+    ) {
+      return otherMessagesCanSwitchTo[currentMessageInd + 1];
+    }
+    return undefined;
+  };
 
   return (
     <div
@@ -741,21 +758,26 @@ export const AIMessage = ({
                       >
                         <TooltipGroup>
                           <div className="flex justify-start w-full gap-x-0.5">
-                            {includeMessageSwitcher &&
-                              otherMessage !== undefined && (
-                                <div className="-mx-1 mr-auto">
-                                  <MessageSwitcher
-                                    currentPage={currentMessageInd + 1}
-                                    totalPages={otherMessagesCanSwitchTo.length}
-                                    handlePrevious={() => {
-                                      onMessageSelection(otherMessage!);
-                                    }}
-                                    handleNext={() => {
-                                      onMessageSelection(otherMessage!);
-                                    }}
-                                  />
-                                </div>
-                              )}
+                            {includeMessageSwitcher && (
+                              <div className="-mx-1 mr-auto">
+                                <MessageSwitcher
+                                  currentPage={currentMessageInd + 1}
+                                  totalPages={otherMessagesCanSwitchTo.length}
+                                  handlePrevious={() => {
+                                    const prevMessage = getPreviousMessage();
+                                    if (prevMessage !== undefined) {
+                                      onMessageSelection(prevMessage);
+                                    }
+                                  }}
+                                  handleNext={() => {
+                                    const nextMessage = getNextMessage();
+                                    if (nextMessage !== undefined) {
+                                      onMessageSelection(nextMessage);
+                                    }
+                                  }}
+                                />
+                              </div>
+                            )}
                           </div>
                           <CustomTooltip showTick line content="Copy">
                             <CopyButton
@@ -816,21 +838,26 @@ export const AIMessage = ({
                       >
                         <TooltipGroup>
                           <div className="flex justify-start w-full gap-x-0.5">
-                            {includeMessageSwitcher &&
-                              otherMessage !== undefined && (
-                                <div className="-mx-1 mr-auto">
-                                  <MessageSwitcher
-                                    currentPage={currentMessageInd + 1}
-                                    totalPages={otherMessagesCanSwitchTo.length}
-                                    handlePrevious={() => {
-                                      onMessageSelection(otherMessage!);
-                                    }}
-                                    handleNext={() => {
-                                      onMessageSelection(otherMessage!);
-                                    }}
-                                  />
-                                </div>
-                              )}
+                            {includeMessageSwitcher && (
+                              <div className="-mx-1 mr-auto">
+                                <MessageSwitcher
+                                  currentPage={currentMessageInd + 1}
+                                  totalPages={otherMessagesCanSwitchTo.length}
+                                  handlePrevious={() => {
+                                    const prevMessage = getPreviousMessage();
+                                    if (prevMessage !== undefined) {
+                                      onMessageSelection(prevMessage);
+                                    }
+                                  }}
+                                  handleNext={() => {
+                                    const nextMessage = getNextMessage();
+                                    if (nextMessage !== undefined) {
+                                      onMessageSelection(nextMessage);
+                                    }
+                                  }}
+                                />
+                              </div>
+                            )}
                           </div>
                           <CustomTooltip showTick line content="Copy">
                             <CopyButton
@@ -1016,10 +1043,27 @@ export const HumanMessage = ({
     ? otherMessagesCanSwitchTo?.indexOf(messageId)
     : undefined;
 
-  let otherMessage: number | undefined = undefined;
-  if (currentMessageInd && otherMessagesCanSwitchTo) {
-    otherMessage = otherMessagesCanSwitchTo[currentMessageInd - 1];
-  }
+  const getPreviousMessage = () => {
+    if (
+      currentMessageInd !== undefined &&
+      currentMessageInd > 0 &&
+      otherMessagesCanSwitchTo
+    ) {
+      return otherMessagesCanSwitchTo[currentMessageInd - 1];
+    }
+    return undefined;
+  };
+
+  const getNextMessage = () => {
+    if (
+      currentMessageInd !== undefined &&
+      currentMessageInd < (otherMessagesCanSwitchTo?.length || 0) - 1 &&
+      otherMessagesCanSwitchTo
+    ) {
+      return otherMessagesCanSwitchTo[currentMessageInd + 1];
+    }
+    return undefined;
+  };
 
   return (
     <div
@@ -1216,7 +1260,6 @@ export const HumanMessage = ({
 
           <div className="flex flex-col md:flex-row gap-x-0.5 mt-1">
             {currentMessageInd !== undefined &&
-              otherMessage !== undefined &&
               onMessageSelection &&
               otherMessagesCanSwitchTo &&
               otherMessagesCanSwitchTo.length > 1 && (
@@ -1227,11 +1270,17 @@ export const HumanMessage = ({
                     totalPages={otherMessagesCanSwitchTo.length}
                     handlePrevious={() => {
                       stopGenerating();
-                      onMessageSelection(otherMessage!);
+                      const prevMessage = getPreviousMessage();
+                      if (prevMessage !== undefined) {
+                        onMessageSelection(prevMessage);
+                      }
                     }}
                     handleNext={() => {
                       stopGenerating();
-                      onMessageSelection(otherMessage!);
+                      const nextMessage = getNextMessage();
+                      if (nextMessage !== undefined) {
+                        onMessageSelection(nextMessage);
+                      }
                     }}
                   />
                 </div>

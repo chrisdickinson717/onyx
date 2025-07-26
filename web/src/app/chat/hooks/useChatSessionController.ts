@@ -168,6 +168,10 @@ export function useChatSessionController({
         return;
       }
 
+      // Set the current session first, then set fetching state to prevent intro flash
+      setCurrentSession(existingChatSessionId);
+      setIsFetchingChatMessages(existingChatSessionId, true);
+
       const response = await fetch(
         `/api/chat/get-chat-session/${existingChatSessionId}`
       );
@@ -176,7 +180,7 @@ export function useChatSessionController({
       const chatSession = session as BackendChatSession;
       setSelectedAssistantFromId(chatSession.persona_id);
 
-      // Always set the current session when we have an existing chat session ID
+      // Ensure the current session is set to the actual session ID from the response
       setCurrentSession(chatSession.chat_session_id);
 
       const newMessageMap = processRawChatHistory(

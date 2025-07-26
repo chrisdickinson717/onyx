@@ -5,7 +5,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { getDisplayNameForModel, LlmDescriptor } from "@/lib/hooks";
-import { modelSupportsImageInput } from "@/lib/llm/utils";
+import { modelSupportsImageInput, structureValue } from "@/lib/llm/utils";
 import { LLMProviderDescriptor } from "@/app/admin/configuration/llm/interfaces";
 import { getProviderIcon } from "@/app/admin/configuration/llm/utils";
 import { MinimalPersonaSnapshot } from "@/app/admin/assistants/interfaces";
@@ -148,7 +148,7 @@ export default function LLMPopover({
                         provider,
                         name,
                       } as LlmDescriptor);
-                      onSelect?.(modelName);
+                      onSelect?.(structureValue(name, provider, modelName));
                       setIsOpen(false);
                     }}
                   >

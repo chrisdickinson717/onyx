@@ -26,7 +26,12 @@ import {
 } from "react";
 import { usePopup } from "@/components/admin/connectors/Popup";
 import { SEARCH_PARAM_NAMES } from "../services/searchParams";
-import { LlmDescriptor, useFilters, useLlmManager } from "@/lib/hooks";
+import {
+  LlmDescriptor,
+  useFederatedConnectors,
+  useFilters,
+  useLlmManager,
+} from "@/lib/hooks";
 import { FeedbackType } from "@/app/chat/interfaces";
 import { OnyxInitializingLoader } from "@/components/OnyxInitializingLoader";
 import { FeedbackModal } from "./modal/FeedbackModal";
@@ -70,7 +75,7 @@ import { useSidebarShortcut } from "@/lib/browserUtilities";
 import { FilePickerModal } from "../my-documents/components/FilePicker";
 
 import { SourceMetadata } from "@/lib/search/interfaces";
-import { ValidSources } from "@/lib/types";
+import { FederatedConnectorDetail, ValidSources } from "@/lib/types";
 import { useDocumentsContext } from "../my-documents/DocumentsContext";
 import { ChatSearchModal } from "../chat_search/ChatSearchModal";
 import { ErrorBanner } from "../message/Resubmit";
@@ -103,6 +108,7 @@ import {
   useHasSentLocalUserMessage,
 } from "../stores/useChatSessionStore";
 import { SimpleMessage } from "../message/messageComponents/SimpleMessage";
+import { FederatedOAuthModal } from "@/components/chat/FederatedOAuthModal";
 
 export function ChatPage({
   toggle,
@@ -169,6 +175,9 @@ export function ChatPage({
     !shouldShowWelcomeModal
   );
 
+  // Also fetch federated connectors for the sources list
+  const { data: federatedConnectorsData } = useFederatedConnectors();
+
   const { user, isAdmin } = useUser();
   const existingChatIdRaw = searchParams?.get("chatId");
 
@@ -229,8 +238,28 @@ export function ChatPage({
 
   const sources: SourceMetadata[] = useMemo(() => {
     const uniqueSources = Array.from(new Set(availableSources));
-    return uniqueSources.map((source) => getSourceMetadata(source));
-  }, [availableSources]);
+    const regularSources = uniqueSources.map((source) =>
+      getSourceMetadata(source)
+    );
+
+    // Add federated connectors as sources
+    const federatedSources =
+      federatedConnectorsData?.map((connector: FederatedConnectorDetail) => {
+        return getSourceMetadata(connector.source);
+      }) || [];
+
+    // Combine sources and deduplicate based on internalName
+    const allSources = [...regularSources, ...federatedSources];
+    const deduplicatedSources = allSources.reduce((acc, source) => {
+      const existing = acc.find((s) => s.internalName === source.internalName);
+      if (!existing) {
+        acc.push(source);
+      }
+      return acc;
+    }, [] as SourceMetadata[]);
+
+    return deduplicatedSources;
+  }, [availableSources, federatedConnectorsData]);
 
   const { popup, setPopup } = usePopup();
 
@@ -293,6 +322,12 @@ export function ChatPage({
     inputRef.current?.getBoundingClientRect().height!
   );
   const scrollDist = useRef<number>(0);
+
+  // Reset scroll state when switching chat sessions
+  useEffect(() => {
+    scrollDist.current = 0;
+    setAboveHorizon(false);
+  }, [existingChatSessionId]);
 
   const handleInputResize = () => {
     setTimeout(() => {
@@ -454,9 +489,7 @@ export function ChatPage({
   const currentRegenerationState = useCurrentRegenerationState();
   const chatSessionId = useChatSessionStore((state) => state.currentSessionId);
   const submittedMessage = useSubmittedMessage();
-  const canContinue = useCanContinue();
   const agenticGenerating = useAgenticGenerating();
-  const uncaughtError = useUncaughtError();
   const loadingError = useLoadingError();
   const isReady = useIsReady();
   const maxTokens = useMaxTokens();
@@ -615,19 +648,6 @@ export function ChatPage({
     }
     clientScrollToBottom();
   }, [chatSessionId]);
-
-  useEffect(() => {
-    if (
-      submittedMessage &&
-      currentChatState === "loading" &&
-      messageHistory.length == 0
-    ) {
-      window.parent.postMessage(
-        { type: CHROME_MESSAGE.LOAD_NEW_CHAT_PAGE },
-        "*"
-      );
-    }
-  }, [submittedMessage, chatSessionId]);
 
   const [stackTraceModalContent, setStackTraceModalContent] = useState<
     string | null
@@ -878,6 +898,8 @@ export function ChatPage({
         <AssistantModal hideModal={() => setShowAssistantsModal(false)} />
       )}
 
+      {isReady && <FederatedOAuthModal />}
+
       <div className="fixed inset-0 flex flex-col text-text-dark">
         <div className="h-[100dvh] overflow-y-hidden">
           <div className="w-full">
@@ -1083,10 +1105,9 @@ export function ChatPage({
                             </div>
                           )}
                           {/* ChatBanner is a custom banner that displays a admin-specified message at 
-                      the top of the chat page. Oly used in the EE version of the app. */}
+                      the top of the chat page. Only used in the EE version of the app. */}
                           {messageHistory.length === 0 &&
                             !isFetchingChatMessages &&
-                            currentChatState == "input" &&
                             !loadingError &&
                             !submittedMessage && (
                               <div className="h-full w-[95%] mx-auto flex flex-col justify-center items-center">
@@ -1124,35 +1145,19 @@ export function ChatPage({
                             {messageHistory.map((message, i) => {
                               const messageTree = completeMessageTree;
 
-                              if (
-                                currentRegenerationState?.finalMessageIndex &&
-                                currentRegenerationState?.finalMessageIndex! <
-                                  message.messageId
-                              ) {
-                                return <></>;
-                              }
-
-                              const messageReactComponentKey = `${i}-${chatSessionId}`;
+                              const messageReactComponentKey = `message-${message.messageId}`;
                               const parentMessage = message.parentMessageId
                                 ? messageTree?.get(message.parentMessageId)
                                 : null;
                               if (message.type === "user") {
-                                if (
-                                  (currentChatState == "loading" &&
-                                    i == messageHistory.length - 1) ||
-                                  (currentRegenerationState?.regenerating &&
-                                    message.messageId >=
-                                      currentRegenerationState?.finalMessageIndex!)
-                                ) {
-                                  return <></>;
-                                }
                                 const nextMessage =
                                   messageHistory.length > i + 1
                                     ? messageHistory[i + 1]
                                     : null;
+
                                 return (
                                   <div
-                                    id={`message-${message.messageId}`}
+                                    id={messageReactComponentKey}
                                     key={messageReactComponentKey}
                                   >
                                     <HumanMessage
@@ -1190,59 +1195,6 @@ export function ChatPage({
                               } else if (message.type === "assistant") {
                                 const previousMessage =
                                   i !== 0 ? messageHistory[i - 1] : null;
-
-                                const currentAlternativeAssistant =
-                                  message.alternateAssistantID != null
-                                    ? availableAssistants.find(
-                                        (persona) =>
-                                          persona.id ==
-                                          message.alternateAssistantID
-                                      )
-                                    : null;
-
-                                if (
-                                  (currentChatState == "loading" &&
-                                    i > messageHistory.length - 1) ||
-                                  (currentRegenerationState?.regenerating &&
-                                    message.messageId >
-                                      currentRegenerationState?.finalMessageIndex!)
-                                ) {
-                                  return <></>;
-                                }
-                                if (parentMessage?.type == "assistant") {
-                                  return <></>;
-                                }
-                                const secondLevelMessage =
-                                  messageHistory[i + 1]?.type === "assistant"
-                                    ? messageHistory[i + 1]
-                                    : undefined;
-
-                                const secondLevelAssistantMessage =
-                                  messageHistory[i + 1]?.type === "assistant"
-                                    ? messageHistory[i + 1]?.message
-                                    : undefined;
-
-                                const agenticDocs =
-                                  messageHistory[i + 1]?.type === "assistant"
-                                    ? messageHistory[i + 1]?.documents
-                                    : undefined;
-
-                                const nextMessage =
-                                  messageHistory[i + 1]?.type === "assistant"
-                                    ? messageHistory[i + 1]
-                                    : undefined;
-
-                                const attachedFileDescriptors =
-                                  previousMessage?.files.filter(
-                                    (file) =>
-                                      file.type == ChatFileType.USER_KNOWLEDGE
-                                  );
-                                const userFiles = allUserFiles?.filter((file) =>
-                                  attachedFileDescriptors?.some(
-                                    (descriptor) =>
-                                      descriptor.id === file.file_id
-                                  )
-                                );
 
                                 return (
                                   <div
@@ -1308,43 +1260,6 @@ export function ChatPage({
                                 );
                               }
                             })}
-
-                            {(currentChatState == "loading" ||
-                              (loadingError &&
-                                !currentRegenerationState?.regenerating &&
-                                messageHistory[messageHistory.length - 1]
-                                  ?.type != "user")) && (
-                              <HumanMessage
-                                setPresentingDocument={setPresentingDocument}
-                                key={-2}
-                                messageId={-1}
-                                content={submittedMessage}
-                              />
-                            )}
-
-                            {currentChatState == "loading" && (
-                              <div
-                                key={`${messageHistory.length}-${chatSessionId}`}
-                              >
-                                <AIMessage
-                                  setPresentingDocument={setPresentingDocument}
-                                  key={-3}
-                                  currentPersona={liveAssistant}
-                                  alternativeAssistant={null}
-                                  messageId={null}
-                                  content={
-                                    <div
-                                      key={"Generating"}
-                                      className="mr-auto relative inline-block"
-                                    >
-                                      <span className="text-sm loading-text">
-                                        Thinking...
-                                      </span>
-                                    </div>
-                                  }
-                                />
-                              </div>
-                            )}
 
                             {loadingError && (
                               <div key={-1}>

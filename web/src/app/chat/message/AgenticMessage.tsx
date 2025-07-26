@@ -365,10 +365,27 @@ export const AgenticMessage = ({
     otherMessagesCanSwitchTo &&
     otherMessagesCanSwitchTo.length > 1;
 
-  let otherMessage: number | undefined = undefined;
-  if (currentMessageInd && otherMessagesCanSwitchTo) {
-    otherMessage = otherMessagesCanSwitchTo[currentMessageInd - 1];
-  }
+  const getPreviousMessage = () => {
+    if (
+      currentMessageInd !== undefined &&
+      currentMessageInd > 0 &&
+      otherMessagesCanSwitchTo
+    ) {
+      return otherMessagesCanSwitchTo[currentMessageInd - 1];
+    }
+    return undefined;
+  };
+
+  const getNextMessage = () => {
+    if (
+      currentMessageInd !== undefined &&
+      currentMessageInd < (otherMessagesCanSwitchTo?.length || 0) - 1 &&
+      otherMessagesCanSwitchTo
+    ) {
+      return otherMessagesCanSwitchTo[currentMessageInd + 1];
+    }
+    return undefined;
+  };
 
   useEffect(() => {
     if (!allowStreaming) {
@@ -524,21 +541,26 @@ export const AgenticMessage = ({
                       >
                         <TooltipGroup>
                           <div className="flex justify-start w-full gap-x-0.5">
-                            {includeMessageSwitcher &&
-                              otherMessage !== undefined && (
-                                <div className="-mx-1 mr-auto">
-                                  <MessageSwitcher
-                                    currentPage={currentMessageInd + 1}
-                                    totalPages={otherMessagesCanSwitchTo.length}
-                                    handlePrevious={() => {
-                                      onMessageSelection(otherMessage!);
-                                    }}
-                                    handleNext={() => {
-                                      onMessageSelection(otherMessage!);
-                                    }}
-                                  />
-                                </div>
-                              )}
+                            {includeMessageSwitcher && (
+                              <div className="-mx-1 mr-auto">
+                                <MessageSwitcher
+                                  currentPage={currentMessageInd + 1}
+                                  totalPages={otherMessagesCanSwitchTo.length}
+                                  handlePrevious={() => {
+                                    const prevMessage = getPreviousMessage();
+                                    if (prevMessage !== undefined) {
+                                      onMessageSelection(prevMessage);
+                                    }
+                                  }}
+                                  handleNext={() => {
+                                    const nextMessage = getNextMessage();
+                                    if (nextMessage !== undefined) {
+                                      onMessageSelection(nextMessage);
+                                    }
+                                  }}
+                                />
+                              </div>
+                            )}
                           </div>
                           <CustomTooltip showTick line content="Copy">
                             <CopyButton
@@ -605,21 +627,26 @@ export const AgenticMessage = ({
                       >
                         <TooltipGroup>
                           <div className="flex justify-start w-full gap-x-0.5">
-                            {includeMessageSwitcher &&
-                              otherMessage !== undefined && (
-                                <div className="-mx-1 mr-auto">
-                                  <MessageSwitcher
-                                    currentPage={currentMessageInd + 1}
-                                    totalPages={otherMessagesCanSwitchTo.length}
-                                    handlePrevious={() => {
-                                      onMessageSelection(otherMessage!);
-                                    }}
-                                    handleNext={() => {
-                                      onMessageSelection(otherMessage!);
-                                    }}
-                                  />
-                                </div>
-                              )}
+                            {includeMessageSwitcher && (
+                              <div className="-mx-1 mr-auto">
+                                <MessageSwitcher
+                                  currentPage={currentMessageInd + 1}
+                                  totalPages={otherMessagesCanSwitchTo.length}
+                                  handlePrevious={() => {
+                                    const prevMessage = getPreviousMessage();
+                                    if (prevMessage !== undefined) {
+                                      onMessageSelection(prevMessage);
+                                    }
+                                  }}
+                                  handleNext={() => {
+                                    const nextMessage = getNextMessage();
+                                    if (nextMessage !== undefined) {
+                                      onMessageSelection(nextMessage);
+                                    }
+                                  }}
+                                />
+                              </div>
+                            )}
                           </div>
                           <CustomTooltip showTick line content="Copy">
                             <CopyButton
