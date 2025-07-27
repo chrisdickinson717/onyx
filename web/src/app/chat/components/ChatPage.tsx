@@ -1228,6 +1228,11 @@ export function ChatPage({
                                         overriddenModel:
                                           llmManager.currentLlm?.modelName,
                                       }}
+                                      messageId={message.messageId}
+                                      otherMessagesCanSwitchTo={
+                                        parentMessage?.childrenMessageIds || []
+                                      }
+                                      onMessageSelection={onMessageSelection}
                                     />
                                   </div>
                                 );

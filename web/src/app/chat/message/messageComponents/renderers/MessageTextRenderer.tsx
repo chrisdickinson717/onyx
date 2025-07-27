@@ -34,13 +34,6 @@ export const MessageTextRenderer: MessageRenderer<
     })
     .join("");
 
-  console.log("packets", packets);
-
-  // Check if the message is complete by looking for MESSAGE_END packet
-  const isComplete = packets.some(
-    (packet) => packet.obj.type === PacketType.MESSAGE_END
-  );
-
   const processContent = (content: string) => {
     const codeBlockRegex = /```(\w*)\n[\s\S]*?```|```[\s\S]*?$/g;
     const matches = content.match(codeBlockRegex);
@@ -60,9 +53,7 @@ export const MessageTextRenderer: MessageRenderer<
     }
 
     const processed = preprocessLaTeX(content);
-
-    // Add blinking dot indicator when message is not complete and has content, similar to the original AIMessage
-    return processed + (!isComplete && processed.trim() ? " [*]() " : "");
+    return processed;
   };
 
   const processedContent = processContent(content);

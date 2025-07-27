@@ -86,6 +86,7 @@ import {
   removeThinkingTokens,
 } from "../services/thinkingTokens";
 import { FileResponse } from "../my-documents/DocumentsContext";
+import { MessageSwitcher } from "./MessageSwitcher";
 
 const TOOLS_WITH_CUSTOM_HANDLING = [
   SEARCH_TOOL_NAME,
@@ -917,76 +918,6 @@ export const AIMessage = ({
     </div>
   );
 };
-
-function MessageSwitcher({
-  currentPage,
-  totalPages,
-  handlePrevious,
-  handleNext,
-  disableForStreaming,
-}: {
-  currentPage: number;
-  totalPages: number;
-  handlePrevious: () => void;
-  handleNext: () => void;
-  disableForStreaming?: boolean;
-}) {
-  return (
-    <div className="flex items-center text-sm space-x-0.5">
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div>
-              <Hoverable
-                icon={FiChevronLeft}
-                onClick={
-                  disableForStreaming
-                    ? () => null
-                    : currentPage === 1
-                      ? undefined
-                      : handlePrevious
-                }
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            {disableForStreaming
-              ? "Wait for agent message to complete"
-              : "Previous"}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
-      <span className="text-text-darker select-none">
-        {currentPage} / {totalPages}
-      </span>
-
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger>
-            <div>
-              <Hoverable
-                icon={FiChevronRight}
-                onClick={
-                  disableForStreaming
-                    ? () => null
-                    : currentPage === totalPages
-                      ? undefined
-                      : handleNext
-                }
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            {disableForStreaming
-              ? "Wait for agent message to complete"
-              : "Next"}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    </div>
-  );
-}
 
 export const HumanMessage = ({
   content,

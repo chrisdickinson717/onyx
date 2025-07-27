@@ -58,6 +58,8 @@ import SubQuestionsDisplay from "./SubQuestionsDisplay";
 import { copyAll, handleCopy } from "./copyingUtils";
 import { ErrorBanner } from "./Resubmit";
 import { transformLinkUri } from "@/lib/utils";
+import { useStreamingMessages } from "./StreamingMessages";
+import { MessageSwitcher } from "./MessageSwitcher";
 
 export const AgenticMessage = ({
   isStreamingQuestions,
@@ -708,33 +710,3 @@ export const AgenticMessage = ({
     </div>
   );
 };
-
-function MessageSwitcher({
-  currentPage,
-  totalPages,
-  handlePrevious,
-  handleNext,
-}: {
-  currentPage: number;
-  totalPages: number;
-  handlePrevious: () => void;
-  handleNext: () => void;
-}) {
-  return (
-    <div className="flex items-center text-sm space-x-0.5">
-      <Hoverable
-        icon={FiChevronLeft}
-        onClick={currentPage === 1 ? undefined : handlePrevious}
-      />
-
-      <span className="text-text-darker select-none">
-        {currentPage} / {totalPages}
-      </span>
-
-      <Hoverable
-        icon={FiChevronRight}
-        onClick={currentPage === totalPages ? undefined : handleNext}
-      />
-    </div>
-  );
-}

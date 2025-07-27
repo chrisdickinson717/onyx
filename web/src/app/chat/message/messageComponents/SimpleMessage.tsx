@@ -18,6 +18,8 @@ import { useRef, useState } from "react";
 import { copyAll, handleCopy } from "../copyingUtils";
 import RegenerateOption from "../../components/RegenerateOption";
 import { FiChevronDown, FiChevronUp, FiTool } from "react-icons/fi";
+import { MessageSwitcher } from "../MessageSwitcher";
+import { BlinkingDot } from "../BlinkingDot";
 
 // Multi-tool renderer component for grouped tools
 function MultiToolRenderer({
@@ -148,13 +150,52 @@ function MultiToolRenderer({
 export function SimpleMessage({
   rawPackets,
   chatState,
+  messageId,
+  otherMessagesCanSwitchTo,
+  onMessageSelection,
 }: {
   rawPackets: Packet[];
   chatState: FullChatState;
+  messageId?: number | null;
+  otherMessagesCanSwitchTo?: number[];
+  onMessageSelection?: (messageId: number) => void;
 }) {
   const markdownRef = useRef<HTMLDivElement>(null);
   const [isRegenerateDropdownVisible, setIsRegenerateDropdownVisible] =
     useState(false);
+
+  // Calculate message switching state
+  const currentMessageInd = messageId
+    ? otherMessagesCanSwitchTo?.indexOf(messageId)
+    : undefined;
+
+  const includeMessageSwitcher =
+    currentMessageInd !== undefined &&
+    onMessageSelection &&
+    otherMessagesCanSwitchTo &&
+    otherMessagesCanSwitchTo.length > 1;
+
+  const getPreviousMessage = () => {
+    if (
+      currentMessageInd !== undefined &&
+      currentMessageInd > 0 &&
+      otherMessagesCanSwitchTo
+    ) {
+      return otherMessagesCanSwitchTo[currentMessageInd - 1];
+    }
+    return undefined;
+  };
+
+  const getNextMessage = () => {
+    if (
+      currentMessageInd !== undefined &&
+      currentMessageInd < (otherMessagesCanSwitchTo?.length || 0) - 1 &&
+      otherMessagesCanSwitchTo
+    ) {
+      return otherMessagesCanSwitchTo[currentMessageInd + 1];
+    }
+    return undefined;
+  };
 
   // Group all chat packets together by ind
   const groupedChatPacketsByInd: Map<number, Packet[]> = rawPackets.reduce(
@@ -283,21 +324,26 @@ export function SimpleMessage({
                       className="overflow-x-visible max-w-content-max focus:outline-none cursor-text select-text"
                       onCopy={(e) => handleCopy(e, markdownRef)}
                     >
-                      {smartGroups.map((group, index) => (
-                        <div key={group.inds.join("-")}>
-                          {group.isMultiTool ? (
-                            <MultiToolRenderer
-                              packets={group.packets}
-                              chatState={chatState}
-                            />
-                          ) : (
-                            renderMessageComponent(
-                              { packets: group.packets },
-                              chatState
-                            )
-                          )}
-                        </div>
-                      ))}
+                      {smartGroups.length === 0 && !isStreamingComplete ? (
+                        // Show blinking dot when no content yet but message is generating
+                        <BlinkingDot />
+                      ) : (
+                        smartGroups.map((group, index) => (
+                          <div key={group.inds.join("-")}>
+                            {group.isMultiTool ? (
+                              <MultiToolRenderer
+                                packets={group.packets}
+                                chatState={chatState}
+                              />
+                            ) : (
+                              renderMessageComponent(
+                                { packets: group.packets },
+                                chatState
+                              )
+                            )}
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 
@@ -306,45 +352,74 @@ export function SimpleMessage({
                     <div className="flex md:flex-row gap-x-0.5 mt-1 transition-transform duration-300 ease-in-out transform opacity-100">
                       <TooltipGroup>
                         <div className="flex justify-start w-full gap-x-0.5">
-                          <CustomTooltip showTick line content="Copy">
-                            <CopyButton
-                              copyAllFn={() =>
-                                copyAll(getTextContent(), markdownRef)
-                              }
-                            />
-                          </CustomTooltip>
-                          <CustomTooltip showTick line content="Good response">
-                            <HoverableIcon
-                              icon={<LikeFeedback />}
-                              onClick={() => chatState.handleFeedback("like")}
-                            />
-                          </CustomTooltip>
-                          <CustomTooltip showTick line content="Bad response">
-                            <HoverableIcon
-                              icon={<DislikeFeedback size={16} />}
-                              onClick={() =>
-                                chatState.handleFeedback("dislike")
-                              }
-                            />
-                          </CustomTooltip>
-                          {chatState.regenerate && (
-                            <CustomTooltip
-                              disabled={isRegenerateDropdownVisible}
-                              showTick
-                              line
-                              content="Regenerate"
-                            >
-                              <RegenerateOption
-                                onDropdownVisibleChange={
-                                  setIsRegenerateDropdownVisible
+                          {includeMessageSwitcher && (
+                            <div className="-mx-1 mr-auto">
+                              <MessageSwitcher
+                                currentPage={(currentMessageInd ?? 0) + 1}
+                                totalPages={
+                                  otherMessagesCanSwitchTo?.length || 0
                                 }
-                                selectedAssistant={chatState.assistant}
-                                regenerate={chatState.regenerate}
-                                overriddenModel={chatState.overriddenModel}
+                                handlePrevious={() => {
+                                  const prevMessage = getPreviousMessage();
+                                  if (
+                                    prevMessage !== undefined &&
+                                    onMessageSelection
+                                  ) {
+                                    onMessageSelection(prevMessage);
+                                  }
+                                }}
+                                handleNext={() => {
+                                  const nextMessage = getNextMessage();
+                                  if (
+                                    nextMessage !== undefined &&
+                                    onMessageSelection
+                                  ) {
+                                    onMessageSelection(nextMessage);
+                                  }
+                                }}
                               />
-                            </CustomTooltip>
+                            </div>
                           )}
                         </div>
+                        <CustomTooltip showTick line content="Copy">
+                          <CopyButton
+                            copyAllFn={() =>
+                              copyAll(getTextContent(), markdownRef)
+                            }
+                          />
+                        </CustomTooltip>
+
+                        <CustomTooltip showTick line content="Good response">
+                          <HoverableIcon
+                            icon={<LikeFeedback size={16} />}
+                            onClick={() => chatState.handleFeedback("like")}
+                          />
+                        </CustomTooltip>
+
+                        <CustomTooltip showTick line content="Bad response">
+                          <HoverableIcon
+                            icon={<DislikeFeedback size={16} />}
+                            onClick={() => chatState.handleFeedback("dislike")}
+                          />
+                        </CustomTooltip>
+
+                        {chatState.regenerate && (
+                          <CustomTooltip
+                            disabled={isRegenerateDropdownVisible}
+                            showTick
+                            line
+                            content="Regenerate"
+                          >
+                            <RegenerateOption
+                              onDropdownVisibleChange={
+                                setIsRegenerateDropdownVisible
+                              }
+                              selectedAssistant={chatState.assistant}
+                              regenerate={chatState.regenerate}
+                              overriddenModel={chatState.overriddenModel}
+                            />
+                          </CustomTooltip>
+                        )}
                       </TooltipGroup>
                     </div>
                   )}
