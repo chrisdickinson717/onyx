@@ -29,7 +29,7 @@ from shared_configs.configs import STRICT_CHUNK_TOKEN_LIMIT
 
 # Not supporting overlaps, we need a clean combination of chunks and it is unclear if overlaps
 # actually help quality at all
-CHUNK_OVERLAP = 0
+CHUNK_OVERLAP = 50
 # Fairly arbitrary numbers but the general concept is we don't want the title/metadata to
 # overwhelm the actual contents of the chunk
 MAX_METADATA_PERCENTAGE = 0.25

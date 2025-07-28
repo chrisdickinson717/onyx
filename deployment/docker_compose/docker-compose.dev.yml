@@ -40,17 +40,19 @@ services:
       - INTEGRATION_TESTS_MODE=${INTEGRATION_TESTS_MODE:-}
       # Gen AI Settings
       - GEN_AI_MAX_TOKENS=${GEN_AI_MAX_TOKENS:-}
-      - QA_TIMEOUT=${QA_TIMEOUT:-}
+      - QA_TIMEOUT=120
       - MAX_CHUNKS_FED_TO_CHAT=${MAX_CHUNKS_FED_TO_CHAT:-}
-      - DISABLE_LLM_CHOOSE_SEARCH=${DISABLE_LLM_CHOOSE_SEARCH:-}
-      - DISABLE_LLM_QUERY_REPHRASE=${DISABLE_LLM_QUERY_REPHRASE:-}
+      - DISABLE_LLM_CHOOSE_SEARCH=TRUE
+      - DISABLE_LLM_QUERY_REPHRASE=TRUE
       - DISABLE_GENERATIVE_AI=${DISABLE_GENERATIVE_AI:-}
       - DISABLE_LITELLM_STREAMING=${DISABLE_LITELLM_STREAMING:-}
       - LITELLM_EXTRA_HEADERS=${LITELLM_EXTRA_HEADERS:-}
       - BING_API_KEY=${BING_API_KEY:-}
       - EXA_API_KEY=${EXA_API_KEY:-}
       - DISABLE_LLM_DOC_RELEVANCE=${DISABLE_LLM_DOC_RELEVANCE:-}
+      - DISABLE_LLM_DOC_RELEVANCE=TRUE
       - GEN_AI_API_KEY=${GEN_AI_API_KEY:-}
+      - REQUEST_TIMEOUT_SECONDS=600
       # if set, allows for the use of the token budget system
       - TOKEN_BUDGET_GLOBALLY_ENABLED=${TOKEN_BUDGET_GLOBALLY_ENABLED:-}
       # Query Options
@@ -68,7 +70,7 @@ services:
       - POSTGRES_USE_NULL_POOL=${POSTGRES_USE_NULL_POOL:-}
       - POSTGRES_API_SERVER_POOL_SIZE=${POSTGRES_API_SERVER_POOL_SIZE:-}
       - POSTGRES_API_SERVER_POOL_OVERFLOW=${POSTGRES_API_SERVER_POOL_OVERFLOW:-}
-      - POSTGRES_IDLE_SESSIONS_TIMEOUT=${POSTGRES_IDLE_SESSIONS_TIMEOUT:-}
+      - POSTGRES_IDLE_SESSIONS_TIMEOUT=120
       - POSTGRES_POOL_RECYCLE=${POSTGRES_POOL_RECYCLE:-}
       - VESPA_HOST=index
       - REDIS_HOST=cache
@@ -90,7 +92,7 @@ services:
       # Leave this on pretty please? Nothing sensitive is collected!
       # https://docs.onyx.app/more/telemetry
       - DISABLE_TELEMETRY=${DISABLE_TELEMETRY:-}
-      - LOG_LEVEL=${LOG_LEVEL:-info} # Set to debug to get more fine-grained logs
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG} # Set to debug to get more fine-grained logs
       - LOG_ALL_MODEL_INTERACTIONS=${LOG_ALL_MODEL_INTERACTIONS:-} # LiteLLM Verbose Logging
       # Log all of Onyx prompts and interactions with the LLM
       - LOG_DANSWER_MODEL_INTERACTIONS=${LOG_DANSWER_MODEL_INTERACTIONS:-}
@@ -110,7 +112,6 @@ services:
       # Lienar OAuth Configs
       - LINEAR_CLIENT_ID=${LINEAR_CLIENT_ID:-}
       - LINEAR_CLIENT_SECRET=${LINEAR_CLIENT_SECRET:-}
-
       # Demo purposes
       - MOCK_CONNECTOR_FILE_PATH=${MOCK_CONNECTOR_FILE_PATH:-}
 
@@ -173,17 +174,17 @@ services:
       - JWT_PUBLIC_KEY_URL=${JWT_PUBLIC_KEY_URL:-} # used for JWT authentication of users via API
       # Gen AI Settings (Needed by OnyxBot)
       - GEN_AI_MAX_TOKENS=${GEN_AI_MAX_TOKENS:-}
-      - QA_TIMEOUT=${QA_TIMEOUT:-}
+      - QA_TIMEOUT=120
       - MAX_CHUNKS_FED_TO_CHAT=${MAX_CHUNKS_FED_TO_CHAT:-}
-      - DISABLE_LLM_CHOOSE_SEARCH=${DISABLE_LLM_CHOOSE_SEARCH:-}
-      - DISABLE_LLM_QUERY_REPHRASE=${DISABLE_LLM_QUERY_REPHRASE:-}
+      - DISABLE_LLM_CHOOSE_SEARCH=TRUE
+      - DISABLE_LLM_QUERY_REPHRASE=TRUE
       - DISABLE_GENERATIVE_AI=${DISABLE_GENERATIVE_AI:-}
       - GENERATIVE_MODEL_ACCESS_CHECK_FREQ=${GENERATIVE_MODEL_ACCESS_CHECK_FREQ:-}
       - DISABLE_LITELLM_STREAMING=${DISABLE_LITELLM_STREAMING:-}
       - LITELLM_EXTRA_HEADERS=${LITELLM_EXTRA_HEADERS:-}
       - GEN_AI_API_KEY=${GEN_AI_API_KEY:-}
       - BING_API_KEY=${BING_API_KEY:-}
-      - EXA_API_KEY=${EXA_API_KEY:-}
+      - REQUEST_TIMEOUT_SECONDS=600
       # Query Options
       - DOC_TIME_DECAY=${DOC_TIME_DECAY:-} # Recency Bias for search results, decay at 1 / (1 + DOC_TIME_DECAY * x years)
       - HYBRID_ALPHA=${HYBRID_ALPHA:-} # Hybrid Search Alpha (0 for entirely keyword, 1 for entirely vector)
@@ -261,7 +262,7 @@ services:
       # Leave this on pretty please? Nothing sensitive is collected!
       # https://docs.onyx.app/more/telemetry
       - DISABLE_TELEMETRY=${DISABLE_TELEMETRY:-}
-      - LOG_LEVEL=${LOG_LEVEL:-info} # Set to debug to get more fine-grained logs
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG} # Set to debug to get more fine-grained logs
       - LOG_ALL_MODEL_INTERACTIONS=${LOG_ALL_MODEL_INTERACTIONS:-} # LiteLLM Verbose Logging
       # Log all of Onyx prompts and interactions with the LLM
       - LOG_DANSWER_MODEL_INTERACTIONS=${LOG_DANSWER_MODEL_INTERACTIONS:-}
@@ -326,7 +327,7 @@ services:
       - INTERNAL_URL=http://api_server:8080
       - WEB_DOMAIN=${WEB_DOMAIN:-}
       - THEME_IS_DARK=${THEME_IS_DARK:-}
-      - DISABLE_LLM_DOC_RELEVANCE=${DISABLE_LLM_DOC_RELEVANCE:-}
+      - DISABLE_LLM_DOC_RELEVANCE=TRUE
 
       # Enterprise Edition only
       - ENABLE_PAID_ENTERPRISE_EDITION_FEATURES=${ENABLE_PAID_ENTERPRISE_EDITION_FEATURES:-false}
@@ -348,7 +349,7 @@ services:
     environment:
       - MIN_THREADS_ML_MODELS=${MIN_THREADS_ML_MODELS:-}
       # Set to debug to get more fine-grained logs
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
 
       # Analytics Configs
       - SENTRY_DSN=${SENTRY_DSN:-}
@@ -381,8 +382,8 @@ services:
       - MIN_THREADS_ML_MODELS=${MIN_THREADS_ML_MODELS:-}
       - INDEXING_ONLY=True
       # Set to debug to get more fine-grained logs
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - CLIENT_EMBEDDING_TIMEOUT=${CLIENT_EMBEDDING_TIMEOUT:-}
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      - CLIENT_EMBEDDING_TIMEOUT=120
 
       # Analytics Configs
       - SENTRY_DSN=${SENTRY_DSN:-}

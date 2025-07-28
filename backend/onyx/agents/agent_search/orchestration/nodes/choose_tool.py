@@ -117,7 +117,14 @@ def choose_tool(
 
     agent_config = cast(GraphConfig, config["metadata"]["config"])
 
+    # --- FORCE SEARCH TOOL ALWAYS ---
+    from onyx.tools.tool_implementations.search.search_tool import SearchTool
     force_use_tool = agent_config.tooling.force_use_tool
+    force_use_tool.force_use = True
+    force_use_tool.tool_name = SearchTool._NAME
+    # Optionally, you can set force_use_tool.args here if needed
+    # Example: force_use_tool.args = {"query": agent_config.inputs.prompt_builder.raw_user_query}
+    # --------------------------------
 
     embedding_thread: TimeoutThread[Embedding] | None = None
     keyword_thread: TimeoutThread[tuple[bool, list[str]]] | None = None
